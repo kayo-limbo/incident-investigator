@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+
+# Local planning and private notes
+PROJECT_NOTES.private.md
+*.private.md
