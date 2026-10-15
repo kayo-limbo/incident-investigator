@@ -4,7 +4,140 @@
 
 ## 当前状态
 
-项目处于初始设计阶段，尚未实现业务服务、调查 Agent 或 Web 平台。以下内容为计划范围，不代表已完成或验证。
+已实现两个最小 FastAPI 服务：订单预览通过 HTTP 查询固定库存，并提供 Docker Compose 配置、可控延迟、请求关联与耗时日志。新增 OpenTelemetry 显式埋点和 Jaeger 配置。尚未接入数据库、调查 Agent 或自建 Web 平台。以下计划能力不代表已完成。
+
+## 调用链可视化
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+docker compose up --build -d --wait
+curl.exe -i "http://127.0.0.1:8000/orders/preview?sku=demo"
+```
+
+打开 [Jaeger](http://127.0.0.1:16686)，选择 `orders` 服务并点击 Find Traces。SDK 批量导出有短暂延迟，首次请求后稍等再搜索。也可以从响应头复制 `X-Trace-ID`，打开 `http://127.0.0.1:16686/trace/这里替换成TraceID`，查看订单 SERVER → 订单 CLIENT → 库存 SERVER 的父子关系。
+
+复用下方 500 ms 延迟操作，重新发请求后，库存 span 应显著变长。日志的 `trace_id` 可关联到同一条链路。不要将三个嵌套 span 的耗时相加。
+
+```powershell
+# 不依赖 Docker 的上下文传播与错误处理测试
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+# 检查 Jaeger 中真实落地的正常、延迟、不可用、恢复链路
+.\.venv\Scripts\python.exe -m lab.run_trace_experiment
+```
+
+端到端脚本输出 `docs/experiments/trace-results.json`，每次运行覆盖；包含实际 span、关联日志和实验真值，不应作为未来 Agent 的输入。它在结束时恢复库存与零延迟。Jaeger 内存数据会在容器重启后丢失。`docker compose up --wait` 只等待服务启动及已有健康检查；Jaeger 的实际接收能力由验收脚本确认。
+
+本机运行 Python 服务也可启用导出：在两个服务启动终端分别设置 `$env:OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="http://127.0.0.1:4318/v1/traces"`。未设置时不导出。页面端口可用 `JAEGER_PORT` 覆盖，默认 16686；OTLP HTTP 宿主机端口为 4318。
+
+设计、版本、传播过程和限制见 [调用链设计笔记](docs/decisions/001-tracing.md)。
+
+本阶段验证状态：3 个本地 ASGI 测试通过；2026-10-15 完成容器构建和 Jaeger 端到端验收。正常、500 ms 延迟、库存不可用、恢复四种场景全部通过，已检查实际入库的 span 父子关系、错误标记和日志 Trace ID，并确认 Jaeger 页面能显示三层调用链。详见 [本次调用链实验记录](docs/experiments/trace-experiment.md)。
+
+## 延迟故障实验
+
+安装本地依赖后，在项目根目录执行：
+
+```powershell
+docker compose up --build -d --wait
+.\.venv\Scripts\python.exe -m lab.run_delay_experiment
+```
+
+脚本依次设置 0、500、0 ms 库存延迟。每组预热一次，然后发送 10 次串行订单请求（并发为 1），检查 HTTP 200、业务响应和请求 ID，并收集同一请求的三条日志。结果写入 `docs/experiments/delay-results.json`；每次运行覆盖该文件。结束时恢复无延迟配置，保留容器运行。脚本会重建当前 Compose 项目的库存容器，请不要与其他故障实验同时运行。
+
+也可以手动修改延迟：
+
+```powershell
+$env:INVENTORY_DELAY_MS="500"
+docker compose up -d --wait
+curl.exe -i -H "X-Request-ID: manual-demo" "http://127.0.0.1:8000/orders/preview?sku=demo"
+docker compose logs --tail 50 orders inventory
+
+# 恢复；仅 start/restart 不会更新容器环境变量，需要 up 重建。
+$env:INVENTORY_DELAY_MS="0"
+docker compose up -d --wait
+```
+
+库存服务启动时读取 `INVENTORY_DELAY_MS`（0–10000 的整数），使用 `asyncio.sleep` 模拟异步等待。订单客户端仍采用 2 秒网络阶段超时，因此超过该阈值的故障可能返回 503；500 ms 实验预期仍返回 200。`/health` 只检查进程存活，不受故障延迟影响，不代表业务已恢复。
+
+订单服务接收或生成 `X-Request-ID`，传给库存服务，并在响应头中返回。日志包含 `service`、`event`、`request_id`、`duration_ms` 等字段，使用单调时钟测量耗时。三个观测分别为库存处理、订单等待库存、订单总处理时间；它们是包含关系，不能相加。客户端耗时还包含本机到容器的网络与协议开销。日志不输出延迟开关或场景真值，实验结果包含真值，未来不得作为 Agent 的诊断输入。
+
+阅读顺序：`lab/inventory/main.py` 的异步延迟 → `lab/observability.py` 的请求 ID 与计时 → `lab/orders/main.py` 的下游计时 → `lab/run_delay_experiment.py` 的对照与日志匹配。
+
+## Docker Compose 运行
+
+在项目根目录执行（Docker Desktop 使用 Linux 容器）：
+
+```powershell
+docker compose up --build -d --wait
+docker compose ps
+curl.exe -i "http://127.0.0.1:8000/orders/preview?sku=demo"
+```
+
+预期订单接口返回 HTTP 200、`{"sku":"demo","can_order":true}`。如果之前本机启动的服务仍占用 8000/8001，可先在原终端按 Ctrl+C，或在当前 PowerShell 中设置 `$env:ORDERS_PORT="18000"`、`$env:INVENTORY_PORT="18001"` 后启动，并改用对应端口访问。
+
+验证库存故障与恢复：
+
+```powershell
+docker compose stop inventory
+curl.exe -i "http://127.0.0.1:8000/orders/preview?sku=demo"
+# 预期 HTTP 503
+
+docker compose start inventory
+docker compose up -d --wait
+curl.exe -i "http://127.0.0.1:8000/orders/preview?sku=demo"
+# 预期恢复 HTTP 200
+
+docker compose logs --tail 50 orders inventory
+docker compose down
+```
+
+`Dockerfile` 打包依赖和代码，两个服务复用同一份构建定义，由 Compose 指定不同启动命令。容器内监听 `0.0.0.0`，宿主机端口只绑定 `127.0.0.1`。订单通过 `http://inventory:8001` 访问库存；`inventory` 是 Compose 服务名，容器里的 `127.0.0.1` 仅指向自身。
+
+`depends_on` 等待库存健康后再启动订单，但不负责运行中的自动恢复。订单健康检查只检查 HTTP 服务存活；库存停止时订单仍可能显示 healthy，必须请求订单业务接口判断链路是否恢复。
+
+`.dockerignore` 默认排除全部文件，只放行 Dockerfile、依赖清单和 lab 下的 Python 源码。私人文档、Git 历史、本地虚拟环境和 `.env` 不进入构建上下文。
+
+基础镜像使用 `python:3.12-slim` 并在 Dockerfile 中固定已拉取的 SHA256 摘要；依赖版本见 `requirements.txt`。首次构建需要连接 Docker Hub 和 Python 包源。若拉取镜像超时，可单独运行 `docker pull python:3.12-slim` 检查网络。
+
+验证记录：Compose 配置检查、镜像构建与容器启动通过；真实容器下已验证正常请求 HTTP 200 → 停止库存后 HTTP 503 → 重启库存后恢复 HTTP 200。库存停止时可能表现为连接失败或超时，两者均返回 503。本机 Python 进程下的对应验收也已通过。
+
+参考：[Compose 网络与服务名](https://docs.docker.com/compose/how-tos/networking/)、[Docker 构建上下文与忽略规则](https://docs.docker.com/build/concepts/context/)。
+
+## 本地运行
+
+使用 Python 3.12，在项目根目录的 PowerShell 中安装依赖：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+打开两个终端，工作目录均为项目根目录，分别启动：
+
+```powershell
+# 终端一：库存服务
+.\.venv\Scripts\python.exe -m uvicorn lab.inventory.main:app --host 127.0.0.1 --port 8001
+```
+
+```powershell
+# 终端二：订单服务
+.\.venv\Scripts\python.exe -m uvicorn lab.orders.main:app --host 127.0.0.1 --port 8000
+```
+
+在第三个终端验收：
+
+```powershell
+curl.exe -i http://127.0.0.1:8001/inventory/demo
+curl.exe -i "http://127.0.0.1:8000/orders/preview?sku=demo"
+```
+
+预期分别返回 HTTP 200 与 `{"sku":"demo","available":10}`、`{"sku":"demo","can_order":true}`。在库存终端按 Ctrl+C，再请求订单接口，预期 HTTP 503 和 `Inventory service unavailable`；重新启动库存服务后，应恢复 HTTP 200。
+
+订单服务默认连接 `http://127.0.0.1:8001`，可通过启动前设置 `INVENTORY_BASE_URL` 环境变量覆盖。HTTP 客户端各网络阶段的超时为 2 秒，并非整个请求的严格总时限。连接失败、超时和下游非成功状态返回 503；库存响应格式错误返回 502。
+
+阅读顺序：`lab/inventory/main.py` 的路由与响应模型 → `lab/orders/main.py` 的 `preview_order` → `lifespan` 中客户端的创建、复用与关闭。库存目前对任何商品都固定返回 10，订单接口只做预览，不创建订单。
+
+实现参考：[FastAPI 生命周期](https://fastapi.tiangolo.com/advanced/events/)、[HTTPX 异步客户端](https://www.python-httpx.org/async/)。
 
 ## 计划能力
 
@@ -33,7 +166,7 @@
 3. 从指标或调用链定位异常环节。
 4. 移除故障并验证业务恢复。
 
-这一阶段暂不接入模型或开发网页。运行命令将在对应实现完成并验证后补充。
+这一阶段暂不接入模型或开发网页。当前具备基础请求链路、延迟注入、关联日志对照实验和 OpenTelemetry 调用链实现；更完整的负载实验仍待完成。
 
 ## 验证原则
 

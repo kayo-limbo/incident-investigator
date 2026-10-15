@@ -1,0 +1,46 @@
+name: incident-investigator
+
+services:
+  jaeger:
+    image: jaegertracing/jaeger:2.9.0
+    ports:
+      - "127.0.0.1:${JAEGER_PORT:-16686}:16686"
+      - "127.0.0.1:4318:4318"
+
+  inventory:
+    build: .
+    environment:
+      INVENTORY_DELAY_MS: ${INVENTORY_DELAY_MS:-0}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
+    depends_on:
+      jaeger:
+        condition: service_started
+    command: ["python", "-m", "uvicorn", "lab.inventory.main:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "127.0.0.1:${INVENTORY_PORT:-8001}:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2).read()"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  orders:
+    build: .
+    command: ["python", "-m", "uvicorn", "lab.orders.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      # inventory 是 Compose 的服务名，不是宿主机地址。
+      INVENTORY_BASE_URL: http://inventory:8001
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
+    ports:
+      - "127.0.0.1:${ORDERS_PORT:-8000}:8000"
+    depends_on:
+      inventory:
+        condition: service_healthy
+    healthcheck:
+      # 只检查订单 HTTP 服务存活，业务恢复另用订单接口验收。
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s

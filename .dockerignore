@@ -1,0 +1,17 @@
+# 默认不发送任何文件，只放行镜像构建需要的内容。
+**
+!Dockerfile
+!requirements.txt
+!lab/
+!lab/**/
+!lab/**/*.py
+
+# 即使位于 lab 内，私密配置和缓存也不发送。
+**/.env
+**/.env.*
+**/*.private.*
+**/__pycache__/
+**/.venv/
+**/.git/
+# 实验控制脚本只在宿主机运行，不进入被测业务镜像。
+lab/run_*.py
