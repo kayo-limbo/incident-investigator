@@ -6,6 +6,32 @@
 
 已实现两个最小 FastAPI 服务：订单预览通过 HTTP 查询固定库存，并提供 Docker Compose 配置、可控延迟、请求关联与耗时日志。新增 OpenTelemetry 显式埋点和 Jaeger 配置。尚未接入数据库、调查 Agent 或自建 Web 平台。以下计划能力不代表已完成。
 
+进度按验收划分：
+
+- [x] 双服务健康请求与 Docker Compose 可重置环境。
+- [x] 延迟故障、结构化日志和跨服务调用链，已保存独立验收结果。
+- [x] 第二类故障：订单的库存地址端口错误；库存自身保持可用，已验证配置修复后的恢复。
+- [ ] 固定排查流程基线、只读证据查询工具与数据边界。
+- [ ] 最小调查 Agent、假设管理与查询预算。
+- [ ] 服务化工作台、审批处置、批量评测。
+
+目前完成的是最小故障实验环境，不代表完整第一阶段评测体系已经完成。
+
+## 配置错误故障实验
+
+```powershell
+docker compose up --build -d --wait
+.\.venv\Scripts\python.exe -m lab.run_config_experiment
+```
+
+脚本依次验证正确地址 `http://inventory:8001`、错误端口 `http://inventory:8002`、恢复正确地址，每组发送 3 次订单请求，并在订单容器内单独探测真实库存接口。实验验证订单返回 503 时库存依然可以返回 200，同时检查 CLIENT span 的 `server.address`、`server.port` 和 `error.type`。
+
+结果写入 `docs/experiments/config-results.json`，每次运行覆盖。结束时恢复库存地址及零延迟。所有实验脚本都会显式设定服务地址，避免继承终端残留的错误地址；它们用于独占的本地实验环境，不应并发运行。
+
+手动实验可以设置 `$env:INVENTORY_BASE_URL="http://inventory:8002"` 后执行 `docker compose up -d --wait`。恢复时将该变量改为 `http://inventory:8001` 并再次执行 `up`。脚本只为其子进程覆盖环境变量，不修改你所在 PowerShell 的变量；手动注入后也需要手动恢复终端变量。
+
+延迟故障有完整的库存 SERVER span，且耗时显著升高；端口错误通常只有订单 SERVER 与 CLIENT span。缺少库存 span 本身不足以证明配置错误，还需要结合目标端口、实际运行配置以及同网络视角的库存探针。详见 [配置错误实验记录](docs/experiments/config-experiment.md)。
+
 ## 调用链可视化
 
 ```powershell
@@ -31,7 +57,7 @@ curl.exe -i "http://127.0.0.1:8000/orders/preview?sku=demo"
 
 设计、版本、传播过程和限制见 [调用链设计笔记](docs/decisions/001-tracing.md)。
 
-本阶段验证状态：3 个本地 ASGI 测试通过；2026-10-15 完成容器构建和 Jaeger 端到端验收。正常、500 ms 延迟、库存不可用、恢复四种场景全部通过，已检查实际入库的 span 父子关系、错误标记和日志 Trace ID，并确认 Jaeger 页面能显示三层调用链。详见 [本次调用链实验记录](docs/experiments/trace-experiment.md)。
+本阶段验证状态：4 个本地 ASGI 测试通过（包括新增连接失败目标端口校验）；2026-10-15 完成容器构建和 Jaeger 端到端验收。正常、500 ms 延迟、库存不可用、恢复四种场景全部通过，已检查实际入库的 span 父子关系、错误标记和日志 Trace ID，并确认 Jaeger 页面能显示三层调用链。详见 [本次调用链实验记录](docs/experiments/trace-experiment.md)。
 
 ## 延迟故障实验
 

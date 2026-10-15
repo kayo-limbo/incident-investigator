@@ -1,0 +1,1914 @@
+{
+  "recorded_at": "2026-10-15T11:39:26.766673+00:00",
+  "phases": [
+    {
+      "name": "baseline",
+      "configured_inventory_url": "http://inventory:8001",
+      "inventory_probe": {
+        "status_code": 200,
+        "body": {
+          "sku": "demo",
+          "available": 10
+        }
+      },
+      "samples": [
+        {
+          "request_id": "fcbf8b610cad4855aa3f524bc801e535",
+          "trace_id": "ce445cb9490f8f17020dcb91081c08a3",
+          "status_code": 200,
+          "durations": {
+            "orders_ms": 8.671,
+            "inventory_call_ms": 7.272,
+            "inventory_ms": 0.485
+          },
+          "trace": {
+            "traceID": "ce445cb9490f8f17020dcb91081c08a3",
+            "spans": [
+              {
+                "traceID": "ce445cb9490f8f17020dcb91081c08a3",
+                "spanID": "d3504702b1ab2c1d",
+                "operationName": "GET /orders/preview",
+                "references": [],
+                "startTime": 1792064369769794,
+                "duration": 8671,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/orders/preview"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "fcbf8b610cad4855aa3f524bc801e535"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "ce445cb9490f8f17020dcb91081c08a3",
+                "spanID": "e6a52c31b385768e",
+                "operationName": "GET /inventory/{sku}",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "ce445cb9490f8f17020dcb91081c08a3",
+                    "spanID": "aff0be9957b8c66e"
+                  }
+                ],
+                "startTime": 1792064369776356,
+                "duration": 485,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/inventory/{sku}"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "fcbf8b610cad4855aa3f524bc801e535"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p2",
+                "warnings": null
+              },
+              {
+                "traceID": "ce445cb9490f8f17020dcb91081c08a3",
+                "spanID": "aff0be9957b8c66e",
+                "operationName": "GET inventory",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "ce445cb9490f8f17020dcb91081c08a3",
+                    "spanID": "d3504702b1ab2c1d"
+                  }
+                ],
+                "startTime": 1792064369770867,
+                "duration": 7272,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "fcbf8b610cad4855aa3f524bc801e535"
+                  },
+                  {
+                    "key": "server.address",
+                    "type": "string",
+                    "value": "inventory"
+                  },
+                  {
+                    "key": "server.port",
+                    "type": "int64",
+                    "value": 8001
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "client"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              }
+            ],
+            "processes": {
+              "p1": {
+                "serviceName": "orders",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "0513c47f-fdee-4665-ad1f-0364c91566d0"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              },
+              "p2": {
+                "serviceName": "inventory",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "3e1551cd-a195-449a-a7b1-8da2908419c3"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              }
+            },
+            "warnings": null
+          }
+        },
+        {
+          "request_id": "4752907de4c44927a5bd1e0320a2c606",
+          "trace_id": "3ec18b1744e83b3ef1578a3e012e6c15",
+          "status_code": 200,
+          "durations": {
+            "orders_ms": 4.763,
+            "inventory_call_ms": 3.751,
+            "inventory_ms": 0.679
+          },
+          "trace": {
+            "traceID": "3ec18b1744e83b3ef1578a3e012e6c15",
+            "spans": [
+              {
+                "traceID": "3ec18b1744e83b3ef1578a3e012e6c15",
+                "spanID": "edbd8aa53f707cb1",
+                "operationName": "GET /inventory/{sku}",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "3ec18b1744e83b3ef1578a3e012e6c15",
+                    "spanID": "4384519503a77f4c"
+                  }
+                ],
+                "startTime": 1792064370316025,
+                "duration": 679,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/inventory/{sku}"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "4752907de4c44927a5bd1e0320a2c606"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "3ec18b1744e83b3ef1578a3e012e6c15",
+                "spanID": "4384519503a77f4c",
+                "operationName": "GET inventory",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "3ec18b1744e83b3ef1578a3e012e6c15",
+                    "spanID": "23735acffd5d6223"
+                  }
+                ],
+                "startTime": 1792064370314030,
+                "duration": 3751,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "4752907de4c44927a5bd1e0320a2c606"
+                  },
+                  {
+                    "key": "server.address",
+                    "type": "string",
+                    "value": "inventory"
+                  },
+                  {
+                    "key": "server.port",
+                    "type": "int64",
+                    "value": 8001
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "client"
+                  }
+                ],
+                "logs": [],
+                "processID": "p2",
+                "warnings": null
+              },
+              {
+                "traceID": "3ec18b1744e83b3ef1578a3e012e6c15",
+                "spanID": "23735acffd5d6223",
+                "operationName": "GET /orders/preview",
+                "references": [],
+                "startTime": 1792064370313312,
+                "duration": 4763,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/orders/preview"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "4752907de4c44927a5bd1e0320a2c606"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p2",
+                "warnings": null
+              }
+            ],
+            "processes": {
+              "p1": {
+                "serviceName": "inventory",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "3e1551cd-a195-449a-a7b1-8da2908419c3"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              },
+              "p2": {
+                "serviceName": "orders",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "0513c47f-fdee-4665-ad1f-0364c91566d0"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              }
+            },
+            "warnings": null
+          }
+        },
+        {
+          "request_id": "e2ade2832a8b4f15b7b24e5e1d4e2006",
+          "trace_id": "db4ce0d238f082acbf68be05247a4efd",
+          "status_code": 200,
+          "durations": {
+            "orders_ms": 4.768,
+            "inventory_call_ms": 4.002,
+            "inventory_ms": 0.775
+          },
+          "trace": {
+            "traceID": "db4ce0d238f082acbf68be05247a4efd",
+            "spans": [
+              {
+                "traceID": "db4ce0d238f082acbf68be05247a4efd",
+                "spanID": "788f13e85f5c1fad",
+                "operationName": "GET /inventory/{sku}",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "db4ce0d238f082acbf68be05247a4efd",
+                    "spanID": "58a51c6aefacd66c"
+                  }
+                ],
+                "startTime": 1792064370831680,
+                "duration": 775,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/inventory/{sku}"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "e2ade2832a8b4f15b7b24e5e1d4e2006"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "db4ce0d238f082acbf68be05247a4efd",
+                "spanID": "58a51c6aefacd66c",
+                "operationName": "GET inventory",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "db4ce0d238f082acbf68be05247a4efd",
+                    "spanID": "fcbc78f848b43900"
+                  }
+                ],
+                "startTime": 1792064370829621,
+                "duration": 4002,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "e2ade2832a8b4f15b7b24e5e1d4e2006"
+                  },
+                  {
+                    "key": "server.address",
+                    "type": "string",
+                    "value": "inventory"
+                  },
+                  {
+                    "key": "server.port",
+                    "type": "int64",
+                    "value": 8001
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "client"
+                  }
+                ],
+                "logs": [],
+                "processID": "p2",
+                "warnings": null
+              },
+              {
+                "traceID": "db4ce0d238f082acbf68be05247a4efd",
+                "spanID": "fcbc78f848b43900",
+                "operationName": "GET /orders/preview",
+                "references": [],
+                "startTime": 1792064370829211,
+                "duration": 4768,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/orders/preview"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "e2ade2832a8b4f15b7b24e5e1d4e2006"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p2",
+                "warnings": null
+              }
+            ],
+            "processes": {
+              "p1": {
+                "serviceName": "inventory",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "3e1551cd-a195-449a-a7b1-8da2908419c3"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              },
+              "p2": {
+                "serviceName": "orders",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "0513c47f-fdee-4665-ad1f-0364c91566d0"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              }
+            },
+            "warnings": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong_port",
+      "configured_inventory_url": "http://inventory:8002",
+      "inventory_probe": {
+        "status_code": 200,
+        "body": {
+          "sku": "demo",
+          "available": 10
+        }
+      },
+      "samples": [
+        {
+          "request_id": "c803e6b02a5d4e35a9488b10d159e625",
+          "trace_id": "b53dc6e3d2d6d435d8a74c1bca0645c5",
+          "status_code": 503,
+          "durations": {
+            "orders_ms": 6.505,
+            "inventory_call_ms": 5.245
+          },
+          "trace": {
+            "traceID": "b53dc6e3d2d6d435d8a74c1bca0645c5",
+            "spans": [
+              {
+                "traceID": "b53dc6e3d2d6d435d8a74c1bca0645c5",
+                "spanID": "a8f92e423519630c",
+                "operationName": "GET /orders/preview",
+                "references": [],
+                "startTime": 1792064379933699,
+                "duration": 6505,
+                "tags": [
+                  {
+                    "key": "error",
+                    "type": "bool",
+                    "value": true
+                  },
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 503
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/orders/preview"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "otel.status_code",
+                    "type": "string",
+                    "value": "ERROR"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "c803e6b02a5d4e35a9488b10d159e625"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "b53dc6e3d2d6d435d8a74c1bca0645c5",
+                "spanID": "a08a543fcff67fea",
+                "operationName": "GET inventory",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "b53dc6e3d2d6d435d8a74c1bca0645c5",
+                    "spanID": "a8f92e423519630c"
+                  }
+                ],
+                "startTime": 1792064379934506,
+                "duration": 5245,
+                "tags": [
+                  {
+                    "key": "error",
+                    "type": "bool",
+                    "value": true
+                  },
+                  {
+                    "key": "error.type",
+                    "type": "string",
+                    "value": "ConnectError"
+                  },
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "otel.status_code",
+                    "type": "string",
+                    "value": "ERROR"
+                  },
+                  {
+                    "key": "otel.status_description",
+                    "type": "string",
+                    "value": "ConnectError: All connection attempts failed"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "c803e6b02a5d4e35a9488b10d159e625"
+                  },
+                  {
+                    "key": "server.address",
+                    "type": "string",
+                    "value": "inventory"
+                  },
+                  {
+                    "key": "server.port",
+                    "type": "int64",
+                    "value": 8002
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "client"
+                  }
+                ],
+                "logs": [
+                  {
+                    "timestamp": 1792064379939697,
+                    "fields": [
+                      {
+                        "key": "event",
+                        "type": "string",
+                        "value": "exception"
+                      },
+                      {
+                        "key": "exception.escaped",
+                        "type": "string",
+                        "value": "False"
+                      },
+                      {
+                        "key": "exception.message",
+                        "type": "string",
+                        "value": "All connection attempts failed"
+                      },
+                      {
+                        "key": "exception.stacktrace",
+                        "type": "string",
+                        "value": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 101, in map_httpcore_exceptions\n    yield\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 394, in handle_async_request\n    resp = await self._pool.handle_async_request(req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection_pool.py\", line 256, in handle_async_request\n    raise exc from None\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection_pool.py\", line 236, in handle_async_request\n    response = await connection.handle_async_request(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection.py\", line 101, in handle_async_request\n    raise exc\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection.py\", line 78, in handle_async_request\n    stream = await self._connect(request)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection.py\", line 124, in _connect\n    stream = await self._network_backend.connect_tcp(**kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_backends/auto.py\", line 31, in connect_tcp\n    return await self._backend.connect_tcp(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_backends/anyio.py\", line 113, in connect_tcp\n    with map_exceptions(exc_map):\n         ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_exceptions.py\", line 14, in map_exceptions\n    raise to_exc(exc) from exc\nhttpcore.ConnectError: All connection attempts failed\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/usr/local/lib/python3.12/site-packages/opentelemetry/trace/__init__.py\", line 602, in use_span\n    yield span\n  File \"/usr/local/lib/python3.12/site-packages/opentelemetry/sdk/trace/__init__.py\", line 1136, in start_as_current_span\n    yield span\n  File \"/app/lab/tracing.py\", line 58, in get_inventory_with_trace\n    response = await client.get(f\"/inventory/{sku}\", headers=headers)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1768, in get\n    return await self.request(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1540, in request\n    return await self.send(request, auth=auth, follow_redirects=follow_redirects)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1629, in send\n    response = await self._send_handling_auth(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1657, in _send_handling_auth\n    response = await self._send_handling_redirects(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1694, in _send_handling_redirects\n    response = await self._send_single_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1730, in _send_single_request\n    response = await transport.handle_async_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 393, in handle_async_request\n    with map_httpcore_exceptions():\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 118, in map_httpcore_exceptions\n    raise mapped_exc(message) from exc\nhttpx.ConnectError: All connection attempts failed\n"
+                      },
+                      {
+                        "key": "exception.type",
+                        "type": "string",
+                        "value": "httpx.ConnectError"
+                      }
+                    ]
+                  }
+                ],
+                "processID": "p1",
+                "warnings": null
+              }
+            ],
+            "processes": {
+              "p1": {
+                "serviceName": "orders",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "0e107b4f-1e11-40f3-8d73-10e73bba39e3"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              }
+            },
+            "warnings": null
+          }
+        },
+        {
+          "request_id": "eb7066516dee4726ac50b5cd73b76815",
+          "trace_id": "3f27415c564f2d98c30236720b91a1d0",
+          "status_code": 503,
+          "durations": {
+            "orders_ms": 4.332,
+            "inventory_call_ms": 3.346
+          },
+          "trace": {
+            "traceID": "3f27415c564f2d98c30236720b91a1d0",
+            "spans": [
+              {
+                "traceID": "3f27415c564f2d98c30236720b91a1d0",
+                "spanID": "383f105bbc9b5858",
+                "operationName": "GET inventory",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "3f27415c564f2d98c30236720b91a1d0",
+                    "spanID": "387906d679759f8f"
+                  }
+                ],
+                "startTime": 1792064380475948,
+                "duration": 3346,
+                "tags": [
+                  {
+                    "key": "error",
+                    "type": "bool",
+                    "value": true
+                  },
+                  {
+                    "key": "error.type",
+                    "type": "string",
+                    "value": "ConnectError"
+                  },
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "otel.status_code",
+                    "type": "string",
+                    "value": "ERROR"
+                  },
+                  {
+                    "key": "otel.status_description",
+                    "type": "string",
+                    "value": "ConnectError: All connection attempts failed"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "eb7066516dee4726ac50b5cd73b76815"
+                  },
+                  {
+                    "key": "server.address",
+                    "type": "string",
+                    "value": "inventory"
+                  },
+                  {
+                    "key": "server.port",
+                    "type": "int64",
+                    "value": 8002
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "client"
+                  }
+                ],
+                "logs": [
+                  {
+                    "timestamp": 1792064380479275,
+                    "fields": [
+                      {
+                        "key": "event",
+                        "type": "string",
+                        "value": "exception"
+                      },
+                      {
+                        "key": "exception.escaped",
+                        "type": "string",
+                        "value": "False"
+                      },
+                      {
+                        "key": "exception.message",
+                        "type": "string",
+                        "value": "All connection attempts failed"
+                      },
+                      {
+                        "key": "exception.stacktrace",
+                        "type": "string",
+                        "value": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 101, in map_httpcore_exceptions\n    yield\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 394, in handle_async_request\n    resp = await self._pool.handle_async_request(req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection_pool.py\", line 256, in handle_async_request\n    raise exc from None\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection_pool.py\", line 236, in handle_async_request\n    response = await connection.handle_async_request(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection.py\", line 101, in handle_async_request\n    raise exc\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection.py\", line 78, in handle_async_request\n    stream = await self._connect(request)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection.py\", line 124, in _connect\n    stream = await self._network_backend.connect_tcp(**kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_backends/auto.py\", line 31, in connect_tcp\n    return await self._backend.connect_tcp(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_backends/anyio.py\", line 113, in connect_tcp\n    with map_exceptions(exc_map):\n         ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_exceptions.py\", line 14, in map_exceptions\n    raise to_exc(exc) from exc\nhttpcore.ConnectError: All connection attempts failed\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/usr/local/lib/python3.12/site-packages/opentelemetry/trace/__init__.py\", line 602, in use_span\n    yield span\n  File \"/usr/local/lib/python3.12/site-packages/opentelemetry/sdk/trace/__init__.py\", line 1136, in start_as_current_span\n    yield span\n  File \"/app/lab/tracing.py\", line 58, in get_inventory_with_trace\n    response = await client.get(f\"/inventory/{sku}\", headers=headers)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1768, in get\n    return await self.request(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1540, in request\n    return await self.send(request, auth=auth, follow_redirects=follow_redirects)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1629, in send\n    response = await self._send_handling_auth(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1657, in _send_handling_auth\n    response = await self._send_handling_redirects(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1694, in _send_handling_redirects\n    response = await self._send_single_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1730, in _send_single_request\n    response = await transport.handle_async_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 393, in handle_async_request\n    with map_httpcore_exceptions():\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 118, in map_httpcore_exceptions\n    raise mapped_exc(message) from exc\nhttpx.ConnectError: All connection attempts failed\n"
+                      },
+                      {
+                        "key": "exception.type",
+                        "type": "string",
+                        "value": "httpx.ConnectError"
+                      }
+                    ]
+                  }
+                ],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "3f27415c564f2d98c30236720b91a1d0",
+                "spanID": "387906d679759f8f",
+                "operationName": "GET /orders/preview",
+                "references": [],
+                "startTime": 1792064380475260,
+                "duration": 4332,
+                "tags": [
+                  {
+                    "key": "error",
+                    "type": "bool",
+                    "value": true
+                  },
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 503
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/orders/preview"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "otel.status_code",
+                    "type": "string",
+                    "value": "ERROR"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "eb7066516dee4726ac50b5cd73b76815"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              }
+            ],
+            "processes": {
+              "p1": {
+                "serviceName": "orders",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "0e107b4f-1e11-40f3-8d73-10e73bba39e3"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              }
+            },
+            "warnings": null
+          }
+        },
+        {
+          "request_id": "1b7a033ebca9404b8aecba252899df2c",
+          "trace_id": "f0728b4563ba98ac24a1fa2df707ed28",
+          "status_code": 503,
+          "durations": {
+            "orders_ms": 3.769,
+            "inventory_call_ms": 2.661
+          },
+          "trace": {
+            "traceID": "f0728b4563ba98ac24a1fa2df707ed28",
+            "spans": [
+              {
+                "traceID": "f0728b4563ba98ac24a1fa2df707ed28",
+                "spanID": "3b5af68605825267",
+                "operationName": "GET inventory",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "f0728b4563ba98ac24a1fa2df707ed28",
+                    "spanID": "ae2d7b2cd037272a"
+                  }
+                ],
+                "startTime": 1792064380993657,
+                "duration": 2661,
+                "tags": [
+                  {
+                    "key": "error",
+                    "type": "bool",
+                    "value": true
+                  },
+                  {
+                    "key": "error.type",
+                    "type": "string",
+                    "value": "ConnectError"
+                  },
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "otel.status_code",
+                    "type": "string",
+                    "value": "ERROR"
+                  },
+                  {
+                    "key": "otel.status_description",
+                    "type": "string",
+                    "value": "ConnectError: All connection attempts failed"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "1b7a033ebca9404b8aecba252899df2c"
+                  },
+                  {
+                    "key": "server.address",
+                    "type": "string",
+                    "value": "inventory"
+                  },
+                  {
+                    "key": "server.port",
+                    "type": "int64",
+                    "value": 8002
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "client"
+                  }
+                ],
+                "logs": [
+                  {
+                    "timestamp": 1792064380996305,
+                    "fields": [
+                      {
+                        "key": "event",
+                        "type": "string",
+                        "value": "exception"
+                      },
+                      {
+                        "key": "exception.escaped",
+                        "type": "string",
+                        "value": "False"
+                      },
+                      {
+                        "key": "exception.message",
+                        "type": "string",
+                        "value": "All connection attempts failed"
+                      },
+                      {
+                        "key": "exception.stacktrace",
+                        "type": "string",
+                        "value": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 101, in map_httpcore_exceptions\n    yield\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 394, in handle_async_request\n    resp = await self._pool.handle_async_request(req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection_pool.py\", line 256, in handle_async_request\n    raise exc from None\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection_pool.py\", line 236, in handle_async_request\n    response = await connection.handle_async_request(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection.py\", line 101, in handle_async_request\n    raise exc\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection.py\", line 78, in handle_async_request\n    stream = await self._connect(request)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_async/connection.py\", line 124, in _connect\n    stream = await self._network_backend.connect_tcp(**kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_backends/auto.py\", line 31, in connect_tcp\n    return await self._backend.connect_tcp(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_backends/anyio.py\", line 113, in connect_tcp\n    with map_exceptions(exc_map):\n         ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/usr/local/lib/python3.12/site-packages/httpcore/_exceptions.py\", line 14, in map_exceptions\n    raise to_exc(exc) from exc\nhttpcore.ConnectError: All connection attempts failed\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/usr/local/lib/python3.12/site-packages/opentelemetry/trace/__init__.py\", line 602, in use_span\n    yield span\n  File \"/usr/local/lib/python3.12/site-packages/opentelemetry/sdk/trace/__init__.py\", line 1136, in start_as_current_span\n    yield span\n  File \"/app/lab/tracing.py\", line 58, in get_inventory_with_trace\n    response = await client.get(f\"/inventory/{sku}\", headers=headers)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1768, in get\n    return await self.request(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1540, in request\n    return await self.send(request, auth=auth, follow_redirects=follow_redirects)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1629, in send\n    response = await self._send_handling_auth(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1657, in _send_handling_auth\n    response = await self._send_handling_redirects(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1694, in _send_handling_redirects\n    response = await self._send_single_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_client.py\", line 1730, in _send_single_request\n    response = await transport.handle_async_request(request)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 393, in handle_async_request\n    with map_httpcore_exceptions():\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py\", line 118, in map_httpcore_exceptions\n    raise mapped_exc(message) from exc\nhttpx.ConnectError: All connection attempts failed\n"
+                      },
+                      {
+                        "key": "exception.type",
+                        "type": "string",
+                        "value": "httpx.ConnectError"
+                      }
+                    ]
+                  }
+                ],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "f0728b4563ba98ac24a1fa2df707ed28",
+                "spanID": "ae2d7b2cd037272a",
+                "operationName": "GET /orders/preview",
+                "references": [],
+                "startTime": 1792064380992788,
+                "duration": 3769,
+                "tags": [
+                  {
+                    "key": "error",
+                    "type": "bool",
+                    "value": true
+                  },
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 503
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/orders/preview"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "otel.status_code",
+                    "type": "string",
+                    "value": "ERROR"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "1b7a033ebca9404b8aecba252899df2c"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              }
+            ],
+            "processes": {
+              "p1": {
+                "serviceName": "orders",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "0e107b4f-1e11-40f3-8d73-10e73bba39e3"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              }
+            },
+            "warnings": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "recovered",
+      "configured_inventory_url": "http://inventory:8001",
+      "inventory_probe": {
+        "status_code": 200,
+        "body": {
+          "sku": "demo",
+          "available": 10
+        }
+      },
+      "samples": [
+        {
+          "request_id": "4259533c4b1d411dbecaa10825a363ab",
+          "trace_id": "b14d7d196ea425acdec9f890fb0794cf",
+          "status_code": 200,
+          "durations": {
+            "orders_ms": 5.3,
+            "inventory_call_ms": 4.271,
+            "inventory_ms": 0.378
+          },
+          "trace": {
+            "traceID": "b14d7d196ea425acdec9f890fb0794cf",
+            "spans": [
+              {
+                "traceID": "b14d7d196ea425acdec9f890fb0794cf",
+                "spanID": "c30c520477252dec",
+                "operationName": "GET inventory",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "b14d7d196ea425acdec9f890fb0794cf",
+                    "spanID": "e3f0fadaacedf6e3"
+                  }
+                ],
+                "startTime": 1792064390110809,
+                "duration": 4271,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "4259533c4b1d411dbecaa10825a363ab"
+                  },
+                  {
+                    "key": "server.address",
+                    "type": "string",
+                    "value": "inventory"
+                  },
+                  {
+                    "key": "server.port",
+                    "type": "int64",
+                    "value": 8001
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "client"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "b14d7d196ea425acdec9f890fb0794cf",
+                "spanID": "e3f0fadaacedf6e3",
+                "operationName": "GET /orders/preview",
+                "references": [],
+                "startTime": 1792064390110161,
+                "duration": 5300,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/orders/preview"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "4259533c4b1d411dbecaa10825a363ab"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "b14d7d196ea425acdec9f890fb0794cf",
+                "spanID": "42efc7fdb7413ed3",
+                "operationName": "GET /inventory/{sku}",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "b14d7d196ea425acdec9f890fb0794cf",
+                    "spanID": "c30c520477252dec"
+                  }
+                ],
+                "startTime": 1792064390113768,
+                "duration": 378,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/inventory/{sku}"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "4259533c4b1d411dbecaa10825a363ab"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p2",
+                "warnings": null
+              }
+            ],
+            "processes": {
+              "p1": {
+                "serviceName": "orders",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "c49d448f-38dc-4e70-9672-9526d0e81816"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              },
+              "p2": {
+                "serviceName": "inventory",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "3e1551cd-a195-449a-a7b1-8da2908419c3"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              }
+            },
+            "warnings": null
+          }
+        },
+        {
+          "request_id": "f2fc1948389b4cc980792694447db9a5",
+          "trace_id": "3b9cb04cc2525af9188385d12f374360",
+          "status_code": 200,
+          "durations": {
+            "orders_ms": 4.626,
+            "inventory_call_ms": 3.816,
+            "inventory_ms": 0.532
+          },
+          "trace": {
+            "traceID": "3b9cb04cc2525af9188385d12f374360",
+            "spans": [
+              {
+                "traceID": "3b9cb04cc2525af9188385d12f374360",
+                "spanID": "c999196eda977b29",
+                "operationName": "GET inventory",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "3b9cb04cc2525af9188385d12f374360",
+                    "spanID": "2c6f693b76f61708"
+                  }
+                ],
+                "startTime": 1792064390646456,
+                "duration": 3816,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "f2fc1948389b4cc980792694447db9a5"
+                  },
+                  {
+                    "key": "server.address",
+                    "type": "string",
+                    "value": "inventory"
+                  },
+                  {
+                    "key": "server.port",
+                    "type": "int64",
+                    "value": 8001
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "client"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "3b9cb04cc2525af9188385d12f374360",
+                "spanID": "2c6f693b76f61708",
+                "operationName": "GET /orders/preview",
+                "references": [],
+                "startTime": 1792064390646009,
+                "duration": 4626,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/orders/preview"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "f2fc1948389b4cc980792694447db9a5"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "3b9cb04cc2525af9188385d12f374360",
+                "spanID": "1f8e956168596b1b",
+                "operationName": "GET /inventory/{sku}",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "3b9cb04cc2525af9188385d12f374360",
+                    "spanID": "c999196eda977b29"
+                  }
+                ],
+                "startTime": 1792064390648348,
+                "duration": 532,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/inventory/{sku}"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "f2fc1948389b4cc980792694447db9a5"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p2",
+                "warnings": null
+              }
+            ],
+            "processes": {
+              "p1": {
+                "serviceName": "orders",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "c49d448f-38dc-4e70-9672-9526d0e81816"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              },
+              "p2": {
+                "serviceName": "inventory",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "3e1551cd-a195-449a-a7b1-8da2908419c3"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              }
+            },
+            "warnings": null
+          }
+        },
+        {
+          "request_id": "1fb12858acb241c9acba83f4202c5a88",
+          "trace_id": "cbc7aca748a653aa33a883cdef63e771",
+          "status_code": 200,
+          "durations": {
+            "orders_ms": 5.085,
+            "inventory_call_ms": 4.201,
+            "inventory_ms": 0.579
+          },
+          "trace": {
+            "traceID": "cbc7aca748a653aa33a883cdef63e771",
+            "spans": [
+              {
+                "traceID": "cbc7aca748a653aa33a883cdef63e771",
+                "spanID": "28f5dcf8735220bd",
+                "operationName": "GET /inventory/{sku}",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "cbc7aca748a653aa33a883cdef63e771",
+                    "spanID": "7a64a395a9bbd58d"
+                  }
+                ],
+                "startTime": 1792064391165769,
+                "duration": 579,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/inventory/{sku}"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "1fb12858acb241c9acba83f4202c5a88"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p1",
+                "warnings": null
+              },
+              {
+                "traceID": "cbc7aca748a653aa33a883cdef63e771",
+                "spanID": "7a64a395a9bbd58d",
+                "operationName": "GET inventory",
+                "references": [
+                  {
+                    "refType": "CHILD_OF",
+                    "traceID": "cbc7aca748a653aa33a883cdef63e771",
+                    "spanID": "b86c60b0c18044a0"
+                  }
+                ],
+                "startTime": 1792064391164170,
+                "duration": 4201,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "1fb12858acb241c9acba83f4202c5a88"
+                  },
+                  {
+                    "key": "server.address",
+                    "type": "string",
+                    "value": "inventory"
+                  },
+                  {
+                    "key": "server.port",
+                    "type": "int64",
+                    "value": 8001
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "client"
+                  }
+                ],
+                "logs": [],
+                "processID": "p2",
+                "warnings": null
+              },
+              {
+                "traceID": "cbc7aca748a653aa33a883cdef63e771",
+                "spanID": "b86c60b0c18044a0",
+                "operationName": "GET /orders/preview",
+                "references": [],
+                "startTime": 1792064391163883,
+                "duration": 5085,
+                "tags": [
+                  {
+                    "key": "http.request.method",
+                    "type": "string",
+                    "value": "GET"
+                  },
+                  {
+                    "key": "http.response.status_code",
+                    "type": "int64",
+                    "value": 200
+                  },
+                  {
+                    "key": "http.route",
+                    "type": "string",
+                    "value": "/orders/preview"
+                  },
+                  {
+                    "key": "otel.scope.name",
+                    "type": "string",
+                    "value": "incident-investigator.lab"
+                  },
+                  {
+                    "key": "request.id",
+                    "type": "string",
+                    "value": "1fb12858acb241c9acba83f4202c5a88"
+                  },
+                  {
+                    "key": "span.kind",
+                    "type": "string",
+                    "value": "server"
+                  }
+                ],
+                "logs": [],
+                "processID": "p2",
+                "warnings": null
+              }
+            ],
+            "processes": {
+              "p1": {
+                "serviceName": "inventory",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "3e1551cd-a195-449a-a7b1-8da2908419c3"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              },
+              "p2": {
+                "serviceName": "orders",
+                "tags": [
+                  {
+                    "key": "service.instance.id",
+                    "type": "string",
+                    "value": "c49d448f-38dc-4e70-9672-9526d0e81816"
+                  },
+                  {
+                    "key": "telemetry.sdk.language",
+                    "type": "string",
+                    "value": "python"
+                  },
+                  {
+                    "key": "telemetry.sdk.name",
+                    "type": "string",
+                    "value": "opentelemetry"
+                  },
+                  {
+                    "key": "telemetry.sdk.version",
+                    "type": "string",
+                    "value": "1.45.1"
+                  }
+                ]
+              }
+            },
+            "warnings": null
+          }
+        }
+      ]
+    }
+  ],
+  "restored_inventory_url": "http://inventory:8001"
+}

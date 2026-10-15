@@ -71,6 +71,22 @@ class TracingTests(unittest.IsolatedAsyncioTestCase):
                     if s.kind == SpanKind.SERVER and s.resource.attributes["service.name"] == "orders")
         self.assertEqual(root.parent.span_id, int("2" * 16, 16))
 
+    async def test_connection_failure_records_actual_target_and_type(self):
+        async def fail(request):
+            raise httpx.ConnectError("simulated refused connection", request=request)
+
+        orders.state.inventory_client = await self.enterAsyncContext(httpx.AsyncClient(
+            transport=httpx.MockTransport(fail), base_url="http://inventory:8002"))
+        response = await self.client.get("/orders/preview")
+        self.assertEqual(response.status_code, 503)
+        spans = self.exporter.get_finished_spans()
+        self.assertEqual(len(spans), 2)
+        child = next(s for s in spans if s.kind == SpanKind.CLIENT)
+        self.assertEqual(child.attributes["server.address"], "inventory")
+        self.assertEqual(child.attributes["server.port"], 8002)
+        self.assertEqual(child.attributes["error.type"], "ConnectError")
+        self.assertEqual(child.status.status_code, StatusCode.ERROR)
+
 
 if __name__ == "__main__":
     unittest.main()

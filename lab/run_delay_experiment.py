@@ -17,10 +17,10 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def compose(*args: str, delay: int) -> str:
+def compose(*args: str, delay: int, inventory_url: str = "http://inventory:8001") -> str:
     result = subprocess.run(
         ["docker", "compose", *args], cwd=ROOT,
-        env={**os.environ, "INVENTORY_DELAY_MS": str(delay)},
+        env={**os.environ, "INVENTORY_DELAY_MS": str(delay), "INVENTORY_BASE_URL": inventory_url},
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         timeout=180,
     )

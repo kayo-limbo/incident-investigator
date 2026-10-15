@@ -4,6 +4,7 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
+import httpx
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
@@ -48,11 +49,17 @@ async def get_inventory_with_trace(client, tracer, sku: str, request_id: str):
     with tracer.start_as_current_span("GET inventory", kind=SpanKind.CLIENT) as span:
         span.set_attribute("http.request.method", "GET")
         span.set_attribute("server.address", client.base_url.host)
+        span.set_attribute("server.port", client.base_url.port or (443 if client.base_url.scheme == "https" else 80))
         span.set_attribute("request.id", request_id)
         headers = {"X-Request-ID": request_id}
         # 在 CLIENT span 内 inject，库存 SERVER span 才会成为它的子节点。
         propagator.inject(headers)
-        response = await client.get(f"/inventory/{sku}", headers=headers)
+        try:
+            response = await client.get(f"/inventory/{sku}", headers=headers)
+        except httpx.RequestError as exc:
+            # 记录实际异常类型，不把“配置错了”等场景真值写进观测。
+            span.set_attribute("error.type", type(exc).__name__)
+            raise
         span.set_attribute("http.response.status_code", response.status_code)
         response.raise_for_status()
         return response

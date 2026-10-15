@@ -58,6 +58,9 @@ async def preview_order(
     except httpx.TimeoutException as exc:
         outcome = "timeout"
         raise HTTPException(status_code=503, detail="Inventory service timed out") from exc
+    except httpx.ConnectError as exc:
+        outcome = "connection_error"
+        raise HTTPException(status_code=503, detail="Inventory service unavailable") from exc
     except httpx.HTTPError as exc:
         # 查询失败不能当成库存为零，否则会给用户错误的业务结论。
         raise HTTPException(status_code=503, detail="Inventory service unavailable") from exc
