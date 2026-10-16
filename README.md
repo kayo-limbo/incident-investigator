@@ -11,11 +11,33 @@
 - [x] 双服务健康请求与 Docker Compose 可重置环境。
 - [x] 延迟故障、结构化日志和跨服务调用链，已保存独立验收结果。
 - [x] 第二类故障：订单的库存地址端口错误；库存自身保持可用，已验证配置修复后的恢复。
-- [ ] 固定排查流程基线、只读证据查询工具与数据边界。
+- [x] 首版固定排查流程与四个只读证据工具；已有结构化证据和接口边界，尚非进程级隔离。
 - [ ] 最小调查 Agent、假设管理与查询预算。
 - [ ] 服务化工作台、审批处置、批量评测。
 
-目前完成的是最小故障实验环境，不代表完整第一阶段评测体系已经完成。
+目前完成的是最小故障实验环境和首个规则基线，不代表完整评测体系或调查 Agent 已经完成。
+
+## 固定流程调查（无需模型）
+
+先产生一个请求，再将返回的 Trace ID 交给调查入口：
+
+```powershell
+$response = Invoke-WebRequest "http://127.0.0.1:8000/orders/preview?sku=demo"
+$traceId = [string]($response.Headers['X-Trace-ID'] | Select-Object -First 1)
+# SDK 批量导出需短暂等待
+Start-Sleep -Seconds 2
+.\.venv\Scripts\python.exe -m backend.investigation $traceId
+```
+
+程序输出结论、限制和带唯一 ID 的证据；需要保存时增加 `--output investigation.private.json`（报告可包含内部服务信息，按需决定是否提交）。工具仅查询真实链路、固定服务契约、一项运行配置和固定地址业务探针；不读取实验真值。详细规则与限制见 [设计笔记](docs/decisions/002-read-only-investigation.md)。
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+# 评测会依次注入故障，结束时恢复正确地址与零延迟
+.\.venv\Scripts\python.exe -m evals.run_baseline
+```
+
+真实容器下已验证健康、延迟、错误端口、库存停止、恢复五个案例。库存停止时返回“证据不足”，而不是凭空认定宕机。结果见 `docs/experiments/baseline-results.json`；这些是功能验收，不是模型准确率或泛化能力指标。
 
 ## 配置错误故障实验
 

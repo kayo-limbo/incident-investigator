@@ -10,3 +10,4 @@ __pycache__/
 # Local planning and private notes
 PROJECT_NOTES.private.md
 *.private.md
+*.private.json

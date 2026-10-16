@@ -1,0 +1,487 @@
+{
+  "recorded_at": "2026-10-16T06:54:39.221095+00:00",
+  "cases": [
+    {
+      "scenario": "healthy",
+      "expected": "no_anomaly_observed",
+      "actual": "no_anomaly_observed",
+      "passed": true,
+      "investigation": {
+        "trace_id": "202b6579fb0775f06ebbb7f04fb01602",
+        "strategy": "fixed_workflow_v1",
+        "finding": {
+          "code": "no_anomaly_observed",
+          "summary": "该请求成功，且未超过基线的 300 ms 延迟阈值。",
+          "evidence_ids": [
+            "bd8c94dda03844529c0e95da83c116c0"
+          ],
+          "limitations": [
+            "仅分析单次请求，不代表系统整体状态。"
+          ]
+        },
+        "evidence": [
+          {
+            "id": "bd8c94dda03844529c0e95da83c116c0",
+            "tool": "get_trace",
+            "source": "http://127.0.0.1:16686/api/traces/202b6579fb0775f06ebbb7f04fb01602",
+            "parameters": {
+              "trace_id": "202b6579fb0775f06ebbb7f04fb01602"
+            },
+            "observed_at": "2026-10-16T06:54:42.280631Z",
+            "status": "ok",
+            "error_code": null,
+            "data": {
+              "trace_id": "202b6579fb0775f06ebbb7f04fb01602",
+              "spans": [
+                {
+                  "span_id": "61068ef0caa7a317",
+                  "parents": [],
+                  "service": "orders",
+                  "operation": "GET /orders/preview",
+                  "start_us": 1792133681076380,
+                  "duration_ms": 43.468,
+                  "tags": {
+                    "http.request.method": "GET",
+                    "http.response.status_code": 200,
+                    "http.route": "/orders/preview",
+                    "span.kind": "server"
+                  }
+                },
+                {
+                  "span_id": "124366a6f34db7ec",
+                  "parents": [
+                    "efaa5b319826c7e1"
+                  ],
+                  "service": "inventory",
+                  "operation": "GET /inventory/{sku}",
+                  "start_us": 1792133681107922,
+                  "duration_ms": 4.25,
+                  "tags": {
+                    "http.request.method": "GET",
+                    "http.response.status_code": 200,
+                    "http.route": "/inventory/{sku}",
+                    "span.kind": "server"
+                  }
+                },
+                {
+                  "span_id": "efaa5b319826c7e1",
+                  "parents": [
+                    "61068ef0caa7a317"
+                  ],
+                  "service": "orders",
+                  "operation": "GET inventory",
+                  "start_us": 1792133681081020,
+                  "duration_ms": 36.093,
+                  "tags": {
+                    "http.request.method": "GET",
+                    "http.response.status_code": 200,
+                    "server.address": "inventory",
+                    "server.port": 8001,
+                    "span.kind": "client"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "latency",
+      "expected": "inventory_latency",
+      "actual": "inventory_latency",
+      "passed": true,
+      "investigation": {
+        "trace_id": "18a10c936e77918f690bee1be1d15983",
+        "strategy": "fixed_workflow_v1",
+        "finding": {
+          "code": "inventory_latency",
+          "summary": "该请求主要耗时发生在库存服务内。",
+          "evidence_ids": [
+            "83e73060f5994d73bef22bee10fc7da4"
+          ],
+          "limitations": [
+            "仅分析单次请求，不代表系统整体状态。",
+            "阈值为 300 ms、占比 70%；只能定位耗时环节，不能确定库存内部根因。"
+          ]
+        },
+        "evidence": [
+          {
+            "id": "83e73060f5994d73bef22bee10fc7da4",
+            "tool": "get_trace",
+            "source": "http://127.0.0.1:16686/api/traces/18a10c936e77918f690bee1be1d15983",
+            "parameters": {
+              "trace_id": "18a10c936e77918f690bee1be1d15983"
+            },
+            "observed_at": "2026-10-16T06:54:51.689866Z",
+            "status": "ok",
+            "error_code": null,
+            "data": {
+              "trace_id": "18a10c936e77918f690bee1be1d15983",
+              "spans": [
+                {
+                  "span_id": "e2f175ee28c9ac9e",
+                  "parents": [
+                    "e055084575db04e2"
+                  ],
+                  "service": "inventory",
+                  "operation": "GET /inventory/{sku}",
+                  "start_us": 1792133690093423,
+                  "duration_ms": 502.233,
+                  "tags": {
+                    "http.request.method": "GET",
+                    "http.response.status_code": 200,
+                    "http.route": "/inventory/{sku}",
+                    "span.kind": "server"
+                  }
+                },
+                {
+                  "span_id": "e055084575db04e2",
+                  "parents": [
+                    "59f54b5a9e1fa187"
+                  ],
+                  "service": "orders",
+                  "operation": "GET inventory",
+                  "start_us": 1792133690084448,
+                  "duration_ms": 514.589,
+                  "tags": {
+                    "http.request.method": "GET",
+                    "http.response.status_code": 200,
+                    "server.address": "inventory",
+                    "server.port": 8001,
+                    "span.kind": "client"
+                  }
+                },
+                {
+                  "span_id": "59f54b5a9e1fa187",
+                  "parents": [],
+                  "service": "orders",
+                  "operation": "GET /orders/preview",
+                  "start_us": 1792133690083761,
+                  "duration_ms": 516.14,
+                  "tags": {
+                    "http.request.method": "GET",
+                    "http.response.status_code": 200,
+                    "http.route": "/orders/preview",
+                    "span.kind": "server"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "wrong_port",
+      "expected": "endpoint_mismatch",
+      "actual": "endpoint_mismatch",
+      "passed": true,
+      "investigation": {
+        "trace_id": "1d0deada2096f1e9302af3c412f3b858",
+        "strategy": "fixed_workflow_v1",
+        "finding": {
+          "code": "endpoint_mismatch",
+          "summary": "订单请求目标与库存服务契约不符，正确地址仍可处理业务请求。",
+          "evidence_ids": [
+            "aa7cad7776cc4b20887b7d34424fc6e4",
+            "ce500e4b5f03424ea318ec20da4ce255",
+            "8740580bd4e84345a90c88dbe2d34c32",
+            "c95f48797cd14163b8fc90a11798671d"
+          ],
+          "limitations": [
+            "仅分析单次请求，不代表系统整体状态。",
+            "配置与探针来自调查时刻；只适用于当前隔离实验环境，不能证明所有历史请求的原因。"
+          ]
+        },
+        "evidence": [
+          {
+            "id": "aa7cad7776cc4b20887b7d34424fc6e4",
+            "tool": "get_trace",
+            "source": "http://127.0.0.1:16686/api/traces/1d0deada2096f1e9302af3c412f3b858",
+            "parameters": {
+              "trace_id": "1d0deada2096f1e9302af3c412f3b858"
+            },
+            "observed_at": "2026-10-16T06:55:06.848937Z",
+            "status": "ok",
+            "error_code": null,
+            "data": {
+              "trace_id": "1d0deada2096f1e9302af3c412f3b858",
+              "spans": [
+                {
+                  "span_id": "7be11b81aa74d685",
+                  "parents": [
+                    "782c9f643ab397a5"
+                  ],
+                  "service": "orders",
+                  "operation": "GET inventory",
+                  "start_us": 1792133705247231,
+                  "duration_ms": 5.2,
+                  "tags": {
+                    "error": true,
+                    "error.type": "ConnectError",
+                    "http.request.method": "GET",
+                    "server.address": "inventory",
+                    "server.port": 8002,
+                    "span.kind": "client"
+                  }
+                },
+                {
+                  "span_id": "782c9f643ab397a5",
+                  "parents": [],
+                  "service": "orders",
+                  "operation": "GET /orders/preview",
+                  "start_us": 1792133705246553,
+                  "duration_ms": 6.221,
+                  "tags": {
+                    "error": true,
+                    "http.request.method": "GET",
+                    "http.response.status_code": 503,
+                    "http.route": "/orders/preview",
+                    "span.kind": "server"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "ce500e4b5f03424ea318ec20da4ce255",
+            "tool": "get_service_topology",
+            "source": "lab-contract:v1",
+            "parameters": {},
+            "observed_at": "2026-10-16T06:55:07.106430Z",
+            "status": "ok",
+            "error_code": null,
+            "data": {
+              "caller": "orders",
+              "callee": "inventory",
+              "expected_endpoint": {
+                "scheme": "http",
+                "host": "inventory",
+                "port": 8001
+              }
+            }
+          },
+          {
+            "id": "8740580bd4e84345a90c88dbe2d34c32",
+            "tool": "get_runtime_config",
+            "source": "docker-compose:orders/INVENTORY_BASE_URL",
+            "parameters": {},
+            "observed_at": "2026-10-16T06:55:07.106430Z",
+            "status": "ok",
+            "error_code": null,
+            "data": {
+              "scheme": "http",
+              "host": "inventory",
+              "port": 8002
+            }
+          },
+          {
+            "id": "c95f48797cd14163b8fc90a11798671d",
+            "tool": "probe_inventory",
+            "source": "orders-network:http://inventory:8001/inventory/demo",
+            "parameters": {},
+            "observed_at": "2026-10-16T06:55:07.577973Z",
+            "status": "ok",
+            "error_code": null,
+            "data": {
+              "status_code": 200,
+              "business_ok": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "stopped_inventory",
+      "expected": "insufficient_evidence",
+      "actual": "insufficient_evidence",
+      "passed": true,
+      "investigation": {
+        "trace_id": "6fd69082b087bc42a74c631d2722e5bb",
+        "strategy": "fixed_workflow_v1",
+        "finding": {
+          "code": "insufficient_evidence",
+          "summary": "配置符合服务契约；连接失败仍可能来自服务停止或网络问题。",
+          "evidence_ids": [
+            "cc59531e11ec4f7b8fe33c63900c3bf7",
+            "3b6296d884864650a968428f13299f3f",
+            "93c728621b314ec29fc32f33e6103086"
+          ],
+          "limitations": [
+            "仅分析单次请求，不代表系统整体状态。"
+          ]
+        },
+        "evidence": [
+          {
+            "id": "cc59531e11ec4f7b8fe33c63900c3bf7",
+            "tool": "get_trace",
+            "source": "http://127.0.0.1:16686/api/traces/6fd69082b087bc42a74c631d2722e5bb",
+            "parameters": {
+              "trace_id": "6fd69082b087bc42a74c631d2722e5bb"
+            },
+            "observed_at": "2026-10-16T06:55:20.359483Z",
+            "status": "ok",
+            "error_code": null,
+            "data": {
+              "trace_id": "6fd69082b087bc42a74c631d2722e5bb",
+              "spans": [
+                {
+                  "span_id": "5a839f7916d5d4bb",
+                  "parents": [
+                    "28200cffc7acccb9"
+                  ],
+                  "service": "orders",
+                  "operation": "GET inventory",
+                  "start_us": 1792133716725682,
+                  "duration_ms": 2005.309,
+                  "tags": {
+                    "error": true,
+                    "error.type": "ConnectTimeout",
+                    "http.request.method": "GET",
+                    "server.address": "inventory",
+                    "server.port": 8001,
+                    "span.kind": "client"
+                  }
+                },
+                {
+                  "span_id": "28200cffc7acccb9",
+                  "parents": [],
+                  "service": "orders",
+                  "operation": "GET /orders/preview",
+                  "start_us": 1792133716725035,
+                  "duration_ms": 2006.375,
+                  "tags": {
+                    "error": true,
+                    "http.request.method": "GET",
+                    "http.response.status_code": 503,
+                    "http.route": "/orders/preview",
+                    "span.kind": "server"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "3b6296d884864650a968428f13299f3f",
+            "tool": "get_service_topology",
+            "source": "lab-contract:v1",
+            "parameters": {},
+            "observed_at": "2026-10-16T06:55:20.643603Z",
+            "status": "ok",
+            "error_code": null,
+            "data": {
+              "caller": "orders",
+              "callee": "inventory",
+              "expected_endpoint": {
+                "scheme": "http",
+                "host": "inventory",
+                "port": 8001
+              }
+            }
+          },
+          {
+            "id": "93c728621b314ec29fc32f33e6103086",
+            "tool": "get_runtime_config",
+            "source": "docker-compose:orders/INVENTORY_BASE_URL",
+            "parameters": {},
+            "observed_at": "2026-10-16T06:55:20.643603Z",
+            "status": "ok",
+            "error_code": null,
+            "data": {
+              "scheme": "http",
+              "host": "inventory",
+              "port": 8001
+            }
+          }
+        ]
+      }
+    },
+    {
+      "scenario": "recovered",
+      "expected": "no_anomaly_observed",
+      "actual": "no_anomaly_observed",
+      "passed": true,
+      "investigation": {
+        "trace_id": "fb115a7b2a35ed50076bad66921d73a3",
+        "strategy": "fixed_workflow_v1",
+        "finding": {
+          "code": "no_anomaly_observed",
+          "summary": "该请求成功，且未超过基线的 300 ms 延迟阈值。",
+          "evidence_ids": [
+            "9f8cf27d734c4e05acd7f0595687da2f"
+          ],
+          "limitations": [
+            "仅分析单次请求，不代表系统整体状态。"
+          ]
+        },
+        "evidence": [
+          {
+            "id": "9f8cf27d734c4e05acd7f0595687da2f",
+            "tool": "get_trace",
+            "source": "http://127.0.0.1:16686/api/traces/fb115a7b2a35ed50076bad66921d73a3",
+            "parameters": {
+              "trace_id": "fb115a7b2a35ed50076bad66921d73a3"
+            },
+            "observed_at": "2026-10-16T06:55:29.502010Z",
+            "status": "ok",
+            "error_code": null,
+            "data": {
+              "trace_id": "fb115a7b2a35ed50076bad66921d73a3",
+              "spans": [
+                {
+                  "span_id": "0c1fde488bcedc45",
+                  "parents": [
+                    "a5da093e851cff68"
+                  ],
+                  "service": "orders",
+                  "operation": "GET inventory",
+                  "start_us": 1792133727903690,
+                  "duration_ms": 4.749,
+                  "tags": {
+                    "http.request.method": "GET",
+                    "http.response.status_code": 200,
+                    "server.address": "inventory",
+                    "server.port": 8001,
+                    "span.kind": "client"
+                  }
+                },
+                {
+                  "span_id": "a5da093e851cff68",
+                  "parents": [],
+                  "service": "orders",
+                  "operation": "GET /orders/preview",
+                  "start_us": 1792133727903307,
+                  "duration_ms": 5.38,
+                  "tags": {
+                    "http.request.method": "GET",
+                    "http.response.status_code": 200,
+                    "http.route": "/orders/preview",
+                    "span.kind": "server"
+                  }
+                },
+                {
+                  "span_id": "3c213d1d8cfe5eea",
+                  "parents": [
+                    "0c1fde488bcedc45"
+                  ],
+                  "service": "inventory",
+                  "operation": "GET /inventory/{sku}",
+                  "start_us": 1792133727906869,
+                  "duration_ms": 0.547,
+                  "tags": {
+                    "http.request.method": "GET",
+                    "http.response.status_code": 200,
+                    "http.route": "/inventory/{sku}",
+                    "span.kind": "server"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "recovery_verified": true
+}
