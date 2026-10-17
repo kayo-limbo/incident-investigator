@@ -2,7 +2,7 @@
 
 ## 范围
 
-`backend/investigation/agent.py` 实现模型无关的执行器，复用四个 EvidenceTools。固定流程仍保留为对照。本阶段没有真实模型 SDK、提示词或模型准确率评测；脚本化模型替身只用于执行器验收。
+`backend/investigation/agent.py` 实现模型无关的执行器，复用四个 EvidenceTools。固定流程仍保留为对照。最初阶段使用脚本化模型替身验收执行器；后续已新增 [DeepSeek 适配器](004-deepseek-adapter.md)，真实模型准确率评测仍未完成。
 
 模型适配器实现 `decide(context) -> dict`。context 包含当前 Trace ID、已收集证据的深拷贝和剩余工具次数。动作 JSON Schema 可从 `ACTION.json_schema()` 获取。
 
@@ -26,4 +26,4 @@
 
 运行 `.\.venv\Scripts\python.exe -m unittest discover -s tests -v`。
 
-测试覆盖最后一次工具调用后正常结束、重复查询预算、未知工具和目标参数拒绝、伪造/空/重复引用、失败证据、上下文篡改隔离、模型异常脱敏、输入校验、零预算和四个工具分发。未接入模型前，CLI 继续运行固定流程；执行器通过 Python 接口供未来模型适配器调用。
+测试覆盖最后一次工具调用后正常结束、重复查询预算、未知工具和目标参数拒绝、伪造/空/重复引用、失败证据、上下文篡改隔离、模型异常脱敏、输入校验、零预算和四个工具分发。CLI 默认运行固定流程，后续新增的 `--strategy agent` 通过 DeepSeek 适配器调用本执行器。

@@ -8,6 +8,17 @@ from .models import Evidence, Finding, Investigation, TraceQuery
 from .tools import EvidenceTools
 
 
+class ModelFailure(Exception):
+    """只允许固定错误码进入报告，禁止泄露供应商异常原文。"""
+
+    def __init__(self, code: str):
+        allowed = {"context_too_large", "authentication_failed", "rate_limited", "http_error",
+                   "response_too_large", "timeout", "transport_error", "invalid_response",
+                   "refused", "output_truncated"}
+        self.code = code if code in allowed else "invalid_response"
+        super().__init__(self.code)
+
+
 class ToolAction(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     kind: Literal["tool"]
@@ -73,6 +84,8 @@ def investigate_agent(trace_id: str, model: DecisionModel,
                                   remaining_tool_calls=max_tool_calls - used)
         try:
             raw = model.decide(context.model_copy(deep=True))
+        except ModelFailure as exc:
+            return stop(f"模型适配器调用失败：{exc.code}。")
         except Exception:
             # 适配器异常可能含请求头和凭据，不能将原文写入调查结果。
             return stop("模型适配器调用失败。")

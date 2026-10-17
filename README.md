@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-已实现两个最小 FastAPI 服务：订单预览通过 HTTP 查询固定库存，并提供 Docker Compose 配置、可控延迟、请求关联与耗时日志。新增 OpenTelemetry 显式埋点和 Jaeger 配置。尚未接入数据库、调查 Agent 或自建 Web 平台。以下计划能力不代表已完成。
+已实现两个最小 FastAPI 服务：订单预览通过 HTTP 查询固定库存，并提供 Docker Compose 配置、可控延迟、请求关联与耗时日志。已有 OpenTelemetry 显式埋点、Jaeger、固定调查流程和受限 Agent 执行器。DeepSeek 适配器与命令行入口已实现并通过离线测试，真实模型验收待本地配置密钥后进行。尚未接入数据库或自建 Web 平台。以下计划能力不代表已完成。
 
 进度按验收划分：
 
@@ -13,6 +13,7 @@
 - [x] 第二类故障：订单的库存地址端口错误；库存自身保持可用，已验证配置修复后的恢复。
 - [x] 首版固定排查流程与四个只读证据工具；已有结构化证据和接口边界，尚非进程级隔离。
 - [x] 最小调查执行器：结构化动作、工具白名单、调用次数预算与证据引用校验；使用脚本化模型替身验收，尚未接入真实模型。
+- [x] DeepSeek V4.1 Flash 适配器与 CLI：JSON 动作、网络超时、输出上限、固定错误码；已完成模拟 HTTP 测试，尚未完成真实 API/故障场景验收。
 - [ ] 最小调查 Agent、假设管理与查询预算。
 - [ ] 服务化工作台、审批处置、批量评测。
 
@@ -20,7 +21,7 @@
 
 ## 固定流程调查（无需模型）
 
-模型无关的调查执行器已提供 `backend.investigation.agent.investigate_agent` Python 接口。当前命令行仍运行固定流程。执行器的接口、预算与实际限制见 [最小调查执行循环](docs/decisions/003-bounded-agent-loop.md)；执行器测试通过不代表模型诊断能力已验证。
+模型无关的调查执行器已提供 `backend.investigation.agent.investigate_agent` Python 接口。命令行默认运行固定流程，`--strategy agent` 启用 DeepSeek。执行器的接口、预算与实际限制见 [最小调查执行循环](docs/decisions/003-bounded-agent-loop.md)；执行器测试通过不代表模型诊断能力已验证。
 
 先产生一个请求，再将返回的 Trace ID 交给调查入口：
 
@@ -41,6 +42,22 @@ Start-Sleep -Seconds 2
 ```
 
 真实容器下已验证健康、延迟、错误端口、库存停止、恢复五个案例。库存停止时返回“证据不足”，而不是凭空认定宕机。结果见 `docs/experiments/baseline-results.json`；这些是功能验收，不是模型准确率或泛化能力指标。
+
+## DeepSeek 调查入口
+
+默认模型 ID 为 `deepseek-flash`，对应 DeepSeek V4.1 Flash，官方地址为 `https://api.deepseek.com`。首版固定非思考模式，使用 JSON 动作协议。运行 Agent 会将所查询的投影证据发送到配置的模型服务。
+
+在当前 PowerShell 中配置密钥（输入不回显），再使用上文新生成的 `$traceId`：
+
+```powershell
+$credential = Get-Credential -UserName "deepseek" -Message "在密码栏输入 DeepSeek API Key"
+$env:DEEPSEEK_API_KEY = $credential.GetNetworkCredential().Password
+.\.venv\Scripts\python.exe -m backend.investigation $traceId --strategy agent --max-tool-calls 6 --output investigation.private.json
+```
+
+可选环境变量见 `.env.example`；程序不自动读取 `.env` 文件。默认单次输出上限 2048 tokens、网络阶段超时 30 秒。模型调用无自动重试，最多调用模型 7 次、查询工具 6 次。这里只限制单次生成和调用次数，没有整个调查的 token/费用预算或严格总时限。
+
+缺少密钥时在发请求前报错。鉴权失败、限流、超时、截断或非法输出会结束调查并保留已有证据；报告中的 `insufficient_evidence` 可能代表执行失败，需同时查看 summary。当前 34 项本地测试通过，其中新增适配器及 CLI 测试 10 项；没有真实模型诊断准确率数据。接口来源、运行限制及后续验收步骤见 [DeepSeek 适配器设计](docs/decisions/004-deepseek-adapter.md)。
 
 ## 配置错误故障实验
 
