@@ -47,15 +47,29 @@ Start-Sleep -Seconds 2
 
 默认模型 ID 为 `deepseek-flash`，对应 DeepSeek V4.1 Flash，官方地址为 `https://api.deepseek.com`。首版固定非思考模式，使用 JSON 动作协议。运行 Agent 会将所查询的投影证据发送到配置的模型服务。
 
-在当前 PowerShell 中配置密钥（输入不回显），再使用上文新生成的 `$traceId`：
+在项目根目录 `.env` 中填写 `DEEPSEEK_API_KEY=你的密钥` 并保存，再使用上文新生成的 `$traceId`：
 
 ```powershell
-$credential = Get-Credential -UserName "deepseek" -Message "在密码栏输入 DeepSeek API Key"
-$env:DEEPSEEK_API_KEY = $credential.GetNetworkCredential().Password
 .\.venv\Scripts\python.exe -m backend.investigation $traceId --strategy agent --max-tool-calls 6 --output investigation.private.json
 ```
 
-可选环境变量见 `.env.example`；程序不自动读取 `.env` 文件。默认单次输出上限 2048 tokens、网络阶段超时 30 秒。模型调用无自动重试，最多调用模型 7 次、查询工具 6 次。这里只限制单次生成和调用次数，没有整个调查的 token/费用预算或严格总时限。
+可选配置见 `.env.example`；程序自动读取项目根目录 `.env`，进程环境变量优先。文件使用单行 KEY=VALUE，可加配对引号，不支持变量展开、多行值或行尾注释；`.env` 已被 Git 忽略。默认单次输出上限 2048 tokens、网络阶段超时 30 秒。模型调用无自动重试，最多调用模型 7 次、查询工具 6 次。这里只限制单次生成和调用次数，没有整个调查的 token/费用预算或严格总时限。
+
+独立五场景验收也可选择模型策略（会临时修改本地实验服务，勿并行运行其他故障实验）：
+
+```powershell
+.\.venv\Scripts\python.exe -m evals.run_baseline --strategy agent
+```
+
+模型结果默认写入 `docs/experiments/agent-results.private.json`，固定流程仍默认写入原来的结果文件。报告包含耗时、工具次数和执行器 `termination`；模型调用失败、动作非法、证据引用非法、预算耗尽均不计为合理拒答。配置缺失在修改实验环境前报错；诊断类别不符会记录失败并继续其余案例，最终恢复服务。五个案例属于功能验收，不是泛化准确率。
+
+独立五场景验收也可选择模型策略（会临时修改本地实验服务，勿并行运行其他故障实验）：
+
+```powershell
+.\.venv\Scripts\python.exe -m evals.run_baseline --strategy agent
+```
+
+模型结果默认写入 `docs/experiments/agent-results.private.json`，固定流程仍默认写入原来的结果文件。报告包含耗时、工具次数和执行器 `termination`；模型调用失败、动作非法、证据引用非法、预算耗尽均不计为合理拒答。配置缺失在修改实验环境前报错；诊断类别不符会记录失败并继续其余案例，最终恢复服务。五个案例属于功能验收，不是泛化准确率。
 
 缺少密钥时在发请求前报错。鉴权失败、限流、超时、截断或非法输出会结束调查并保留已有证据；报告中的 `insufficient_evidence` 可能代表执行失败，需同时查看 summary。当前 34 项本地测试通过，其中新增适配器及 CLI 测试 10 项；没有真实模型诊断准确率数据。接口来源、运行限制及后续验收步骤见 [DeepSeek 适配器设计](docs/decisions/004-deepseek-adapter.md)。
 

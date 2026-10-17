@@ -4,6 +4,7 @@ import json
 import math
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from time import monotonic
 from urllib.parse import urlsplit
 
@@ -29,6 +30,38 @@ no_anomaly_observed 只描述本次观测；证据不足时使用 insufficient_e
 
 class ModelConfigError(ValueError):
     """仅包含固定错误信息，不携带环境变量原值。"""
+
+
+ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+
+def read_env_file() -> dict[str, str]:
+    """读取项目内单行 KEY=VALUE；不执行脚本，不展开变量，不修改进程环境。"""
+    try:
+        content = ENV_FILE.read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return {}
+    except (OSError, UnicodeError):
+        raise ModelConfigError("无法读取项目 .env 文件") from None
+    allowed = {"DEEPSEEK_API_KEY", "INVESTIGATOR_BASE_URL", "INVESTIGATOR_MODEL",
+               "INVESTIGATOR_TIMEOUT_SECONDS", "INVESTIGATOR_MAX_OUTPUT_TOKENS"}
+    values = {}
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, separator, value = line.partition("=")
+        if name.strip() not in allowed:
+            continue
+        if not separator:
+            raise ModelConfigError(".env 配置须采用单行 KEY=VALUE 格式")
+        value = value.strip()
+        if value.startswith(("'", '"')):
+            if len(value) < 2 or value[-1] != value[0]:
+                raise ModelConfigError(".env 配置引号不匹配")
+            value = value[1:-1]
+        values[name.strip()] = value
+    return values
 
 
 @dataclass(frozen=True)
@@ -62,14 +95,15 @@ class ModelConfig:
 
     @classmethod
     def from_env(cls):
+        values = {**read_env_file(), **os.environ}
         try:
-            timeout = float(os.getenv("INVESTIGATOR_TIMEOUT_SECONDS", "30"))
-            tokens = int(os.getenv("INVESTIGATOR_MAX_OUTPUT_TOKENS", "2048"))
+            timeout = float(values.get("INVESTIGATOR_TIMEOUT_SECONDS", "30"))
+            tokens = int(values.get("INVESTIGATOR_MAX_OUTPUT_TOKENS", "2048"))
         except ValueError:
             raise ModelConfigError("模型超时或输出上限配置不是有效数字") from None
-        return cls(base_url=os.getenv("INVESTIGATOR_BASE_URL", "https://api.deepseek.com"),
-                   model=os.getenv("INVESTIGATOR_MODEL", "deepseek-flash"),
-                   api_key=os.getenv("DEEPSEEK_API_KEY", ""),
+        return cls(base_url=values.get("INVESTIGATOR_BASE_URL", "https://api.deepseek.com"),
+                   model=values.get("INVESTIGATOR_MODEL", "deepseek-flash"),
+                   api_key=values.get("DEEPSEEK_API_KEY", ""),
                    timeout_seconds=timeout, max_output_tokens=tokens)
 
 

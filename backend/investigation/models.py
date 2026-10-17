@@ -35,3 +35,4 @@ class Investigation(BaseModel):
     strategy: str = "fixed_workflow_v1"
     finding: Finding
     evidence: list[Evidence]
+    termination: Literal["completed", "model_error", "invalid_action", "invalid_finding", "budget_exhausted"] = "completed"

@@ -1,6 +1,8 @@
 import io
 import json
 import os
+import tempfile
+from pathlib import Path
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
@@ -22,6 +24,28 @@ def envelope(action=TOOL, reason="stop", **message_fields):
 
 
 class ModelTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.env_file = Path(directory.name) / ".env"
+        patcher = patch("backend.investigation.model.ENV_FILE", self.env_file)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_project_env_file_and_environment_precedence(self):
+        self.env_file.write_text('DEEPSEEK_API_KEY="file-secret"\nINVESTIGATOR_MODEL=deepseek-flash\n',
+                                 encoding="utf-8-sig")
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(ModelConfig.from_env().api_key, "file-secret")
+            with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "env-secret"}):
+                self.assertEqual(ModelConfig.from_env().api_key, "env-secret")
+
+    def test_invalid_env_file_does_not_echo_secret(self):
+        self.env_file.write_text('DEEPSEEK_API_KEY="file-secret\n', encoding="utf-8")
+        with self.assertRaises(ModelConfigError) as caught:
+            ModelConfig.from_env()
+        self.assertNotIn("file-secret", str(caught.exception))
+
     def config(self, **updates):
         return ModelConfig(**{"base_url": "https://api.example.test/v1", "model": "deepseek-flash",
                               "api_key": "test-secret", **updates})
