@@ -14,6 +14,7 @@
 - [x] 首版固定排查流程与四个只读证据工具；已有结构化证据和接口边界，尚非进程级隔离。
 - [x] 最小调查执行器：结构化动作、工具白名单、调用次数预算与证据引用校验。
 - [x] DeepSeek V4.1 Flash 适配器与 CLI：已完成模拟 HTTP 测试和一次真实五场景验收，库存停止时合理拒答。
+- [x] 真实 HTTP 连接池竞争实验：七组并发/低负载/慢下游对照，已验证发送前延迟、PoolTimeout 和恢复；新场景尚未接入调查策略。
 - [ ] 假设管理、重复查询控制与累计 token/时间预算。
 - [ ] 服务化工作台、审批处置、批量评测。
 
@@ -72,6 +73,19 @@ Start-Sleep -Seconds 2
 模型结果默认写入 `docs/experiments/agent-results.private.json`，固定流程仍默认写入原来的结果文件。报告包含耗时、工具次数和执行器 `termination`；模型调用失败、动作非法、证据引用非法、预算耗尽均不计为合理拒答。配置缺失在修改实验环境前报错；诊断类别不符会记录失败并继续其余案例，最终恢复服务。五个案例属于功能验收，不是泛化准确率。
 
 缺少密钥时在发请求前报错。鉴权失败、限流、超时、截断或非法输出会结束调查并保留已有证据；报告中的 `insufficient_evidence` 可能代表执行失败，需同时查看 termination 和 summary。当前 41 项本地测试通过。2026-10-17 使用真实 DeepSeek 完成健康、延迟、错误端口、库存停止、恢复五个案例，均符合预期并恢复业务；这是单次功能验收，不是泛化准确率。实际耗时、工具次数和重复查询问题见 [模型验收记录](docs/experiments/agent-evaluation.md)。接口来源和运行限制见 [DeepSeek 适配器设计](docs/decisions/004-deepseek-adapter.md)。
+
+## 连接池竞争与慢下游对照
+
+```powershell
+docker compose build
+.\.venv\Scripts\python.exe -m lab.run_pool_experiment
+```
+
+七组条件各采集 24 个请求，比较正常/慢库存、不同连接池上限及低负载。实测小池组库存 P95 约 83 ms、发送前 P95 约 572 ms；慢下游宽池组库存 P95 约 503 ms、发送前约 7 ms。慢下游叠加池竞争时 24 请求中 12 次 PoolTimeout，而小池在低负载下全部成功。
+
+结果和限制见 [连接池实验](docs/experiments/pool-experiment.md)。`client.pre_send_ms` 包含排队、建连和调度，不能当成纯连接池等待时间。成功请求与超时请求须一起分析；当前调查工具与 Agent 尚未扩展到该场景。
+
+手动可设置 `INVENTORY_MAX_CONNECTIONS`（默认 100）与 `INVENTORY_POOL_TIMEOUT_MS`（默认 2000）。实验脚本会恢复默认池配置、正确地址和零延迟，并检查业务恢复；它们使用独占本地实验环境，不要并行执行。结果文件 `pool-results.json` 包含场景真值，不可作为 Agent 输入。
 
 ## 配置错误故障实验
 

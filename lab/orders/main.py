@@ -9,14 +9,17 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, Field, ValidationError
 from lab.observability import emit, install_request_logging
 from lab.tracing import get_inventory_with_trace, tracing_lifespan
+from lab.client_observation import ObservedTransport, client_settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 一个进程复用一个客户端和连接池；服务关闭时自动释放连接。
+    max_connections, pool_timeout_ms = client_settings()
     async with tracing_lifespan(app, "orders"), httpx.AsyncClient(
         base_url=os.getenv("INVENTORY_BASE_URL", "http://127.0.0.1:8001"),
-        timeout=2.0,
+        timeout=httpx.Timeout(2.0, pool=pool_timeout_ms / 1000),
+        transport=ObservedTransport(max_connections, pool_timeout_ms),
         trust_env=False,
     ) as client:
         app.state.inventory_client = client
@@ -55,6 +58,9 @@ async def preview_order(
             client, request.app.state.tracer, sku, request.state.request_id,
         )
         outcome = "success"
+    except httpx.PoolTimeout as exc:
+        outcome = "pool_timeout"
+        raise HTTPException(status_code=503, detail="Inventory client connection pool timed out") from exc
     except httpx.TimeoutException as exc:
         outcome = "timeout"
         raise HTTPException(status_code=503, detail="Inventory service timed out") from exc
