@@ -11,3 +11,4 @@ __pycache__/
 PROJECT_NOTES.private.md
 *.private.md
 *.private.json
+.snapshots/

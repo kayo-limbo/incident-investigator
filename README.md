@@ -20,6 +20,14 @@
 
 目前已完成最小故障实验环境、规则基线和最小模型调查闭环；五场景验收不代表完整评测体系或泛化能力。
 
+## 窗口证据与冻结快照
+
+新增 `WindowEvidenceTools`：订单窗口查询、成功/失败样本摘要、连接池观测投影、本地内容寻址快照和离线下钻。窗口最长五分钟、最多 200 条，区分已观测、空结果、部分数据和不可用；任何查询都不保证全量。设计与运行方法见 [窗口证据与快照](docs/decisions/006-window-evidence.md)。
+
+2026-10-18 新增 10 项测试，全部 55 项本地测试通过；真实 Jaeger 三组共 75 个窗口请求（含预热）验收通过，业务恢复已确认。验收入口为 `python -m evals.run_window_evidence`，独立检查正常、小池、慢下游叠加池超时三组请求及最终业务恢复，结果见 [窗口验收记录](docs/experiments/window-evidence.md)。实验独占本地 Compose 环境，会调整并恢复配置。
+
+现有规则/Agent 循环仍使用单 Trace，尚未接入窗口诊断、假设管理或累计模型 token 用量。窗口工具记录单次调用与耗时；快照保存完整受限投影，不保存任意原始标签。
+
 ## 固定流程调查（无需模型）
 
 模型无关的调查执行器已提供 `backend.investigation.agent.investigate_agent` Python 接口。命令行默认运行固定流程，`--strategy agent` 启用 DeepSeek。执行器的接口、预算与实际限制见 [最小调查执行循环](docs/decisions/003-bounded-agent-loop.md)；执行器测试通过不代表模型诊断能力已验证。

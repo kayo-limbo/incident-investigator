@@ -1,0 +1,181 @@
+{
+  "recorded_at": "2026-10-18T13:54:22.847976+00:00",
+  "cases": [
+    {
+      "name": "healthy",
+      "passed": true,
+      "summary": {
+        "request_count": 25,
+        "http_status_counts": {
+          "200": 25
+        },
+        "client_error_counts": {},
+        "orders_p95_ms": 95.558,
+        "measurements": {
+          "inventory_ms": {
+            "count": 25,
+            "p95_ms": 82.191
+          },
+          "pre_send_ms": {
+            "count": 25,
+            "p95_ms": 9.988514000013993
+          },
+          "transport_ms": {
+            "count": 25,
+            "p95_ms": 93.25362800001358
+          }
+        },
+        "trace_ids": [
+          "0272a314667c487084fd5fcd24d707c4",
+          "02d6dda94a793f0e1d959438211f84aa",
+          "063c9bb7fac8f8416eab8c5fdebef643",
+          "0b509245db29ddd6c535ebbae086111d",
+          "593fe21fb08a99d96a978614337330b9",
+          "5ca237e2cadb801d323e2db112df7425",
+          "62175e8fda54fcd406affa02f20645d0",
+          "798d167617a88385065ec9304d3e6aa0",
+          "81bf25555ea58157a321a020b38d18e8",
+          "89d37bf7ee548e0c9a5d94f242908c6d",
+          "8ada033099903b06c62b367e2ca6a508",
+          "9ca42da7fc4cdd250d9c16813321a827",
+          "9e38b3f87133f2bf9f8e202d471f1efe",
+          "a92116610d662c8f0d9ce597a4d6fbe5",
+          "aa638ec1a7c4d07703238bbadd9142a4",
+          "ac384623b956f0d2d2cc31d459e238df",
+          "ad360d96b587192174da3538fdfe80a5",
+          "b6a2ffe471e82eb2150770c680d507e8",
+          "b73c33b2822a3d4b640de02ef0107163",
+          "d4039b7ac1785d9a6c8b48e413a7fdef",
+          "dc8759c1a4b82a2273a84c2103cfb6f4",
+          "e823de2896b8e008a1b1dc0f749ed6af",
+          "ec063e5785051a3f9b53acb16ff540f6",
+          "faa56197db5196f605240b797603ba38",
+          "fc0e526ee4827565f00b8b95379f71e6"
+        ]
+      },
+      "usage": {
+        "tool_calls": 1,
+        "elapsed_ms": 171.99999999866122
+      }
+    },
+    {
+      "name": "pool_wait",
+      "passed": true,
+      "summary": {
+        "request_count": 25,
+        "http_status_counts": {
+          "200": 25
+        },
+        "client_error_counts": {},
+        "orders_p95_ms": 650.564,
+        "measurements": {
+          "inventory_ms": {
+            "count": 25,
+            "p95_ms": 81.67
+          },
+          "pre_send_ms": {
+            "count": 25,
+            "p95_ms": 566.6902289999882
+          },
+          "transport_ms": {
+            "count": 25,
+            "p95_ms": 649.4608369999924
+          }
+        },
+        "trace_ids": [
+          "084fc5fdd06bfa67cc73bcd9ae3118fc",
+          "0f8591a17ad7dcf186d0365341fd954d",
+          "23a578530e8a13b3ad225b37a1a101ff",
+          "28e489c273346fe240e90c0a1da6035b",
+          "2ff4454b090bdaaa2c943cc93c2bdb90",
+          "3382765b531d7546cfd9e845b8b7b0bd",
+          "3b661a42b152fe3b8b53a5eba5635886",
+          "3f3540c067b6674faa6046a304127c56",
+          "5bdf6dc936d6ded9c4a632c594a510db",
+          "63364f35476281fe1f317305e91f549e",
+          "6428d46c24ef70b464f42ceefaddec59",
+          "6e26a07492fae672e064086e77900623",
+          "76b0791087a37725703d6ef445924f46",
+          "79f94f7cdc95e60a1af7579c8cf46e56",
+          "9a726cd6d4b1e5ab74b7475e9c4049f0",
+          "a2fb5cd918f6d4aa28a9bd7efd440bc1",
+          "a71fd25fb2803c6b56447275c370b9f7",
+          "a75c6d2cc0b3713a0758d5ff2ecca579",
+          "c88b5069db9af6cde137339403105609",
+          "cd53fc4fbde986fb22470b486b866e64",
+          "d547a9945285d36c3df510f3f386b225",
+          "de2adf6e08d89e774b881109cb082e99",
+          "ef54ca9e13c033a42bdd002e2e0692c3",
+          "fb3aaa641a56e1223210451cd1e6db3b",
+          "fddb267b4ba0717bb041865de1026020"
+        ]
+      },
+      "usage": {
+        "tool_calls": 1,
+        "elapsed_ms": 218.0000000007567
+      }
+    },
+    {
+      "name": "slow_and_pool_timeout",
+      "passed": true,
+      "summary": {
+        "request_count": 25,
+        "http_status_counts": {
+          "503": 12,
+          "200": 13
+        },
+        "client_error_counts": {
+          "PoolTimeout": 12
+        },
+        "orders_p95_ms": 509.466,
+        "measurements": {
+          "inventory_ms": {
+            "count": 13,
+            "p95_ms": 502.323
+          },
+          "pre_send_ms": {
+            "count": 13,
+            "p95_ms": 3.4414889999823117
+          },
+          "transport_ms": {
+            "count": 25,
+            "p95_ms": 506.7892440000037
+          }
+        },
+        "trace_ids": [
+          "042bfd3e60f548f0d71c45e82a573663",
+          "0503886fecb13b4c24c586043609d5ec",
+          "0a240539bd1787b6616199cbf83ae797",
+          "0e1ae9cf88360d7ea7f27488e574461c",
+          "0fd61ba706fa5ef113db234cc56629ac",
+          "0ffffcd5d792131ea61610c4e92d7990",
+          "1347aebe8fd6df1085a594b45bedc684",
+          "1b017f544578f3c8718ce971546e5a80",
+          "2772f02395da79047759295e8ea4d296",
+          "42924a5a8df1e2bedef5261bbc6c33c3",
+          "544337631fa19cc61d2d7f531f8f52b0",
+          "57878cd3d9bdb498d330c80b44df9672",
+          "5b1f2dfdf57b3230ca281d181fea7962",
+          "60e49d1e85adbecee918d55bc2910935",
+          "73fdaedf005c2ffc48bad92d4226b5eb",
+          "760794e0cdd4cd626b9bb0be91aa80c9",
+          "77477c8c977e265893d31ba8eb8d3354",
+          "8ddc0423a21bc85d7acfbbcfb8232b56",
+          "96a30967f07b48705f8e8759aa444811",
+          "b84ed0e93add85461ef1b357752d1366",
+          "d7647fc51b35e0f3817e3bfada6a7826",
+          "e2964bc24629e86909544c440abbbd2b",
+          "edc656dca61bb398f298584084ff27c3",
+          "f84b0b8ef2fcddf50527bce662b45820",
+          "fde1727d62ea7efc68ef5558a3650165"
+        ]
+      },
+      "usage": {
+        "tool_calls": 1,
+        "elapsed_ms": 250.0
+      }
+    }
+  ],
+  "completed": true,
+  "recovery_verified": true
+}
