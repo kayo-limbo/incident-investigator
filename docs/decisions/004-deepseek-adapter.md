@@ -28,6 +28,8 @@ HTTP 鉴权、限流、网络异常、输出截断、拒答、空输出和响应
 
 ## 官方接口来源
 
+2026-10-19 补充：适配器现在提供每次调用的 `last_usage`，在调用开始重置，失败或缺失时不会继承旧值；窗口执行器汇总 prompt/completion/total tokens。窗口子类只替换系统提示与动作 Schema，复用原 HTTP、响应大小和失败处理。旧单 Trace 报告尚未增加用量字段。详见 [窗口调查协议](007-window-investigation.md)。
+
 本实现按接口文档编写，没有复制外部项目源码；截至 2026-10-17 核对：
 
 - [DeepSeek 首次 API 调用](https://api-docs.deepseek.com/)：模型 ID、基址、鉴权及端点。

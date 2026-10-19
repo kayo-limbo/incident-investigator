@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from .agent import ACTION, DecisionContext, ModelFailure
+from .usage import token_usage
 
 
 SYSTEM_PROMPT = """你是只读微服务故障调查员。根据当前上下文选择下一步动作，只输出一个 JSON 对象。
@@ -108,11 +109,14 @@ class ModelConfig:
 
 
 class ChatCompletionsModel:
+    system_prompt = SYSTEM_PROMPT
+    action_schema = ACTION
     MAX_RESPONSE_BYTES = 1_000_000
     MAX_CONTEXT_BYTES = 256_000
 
     def __init__(self, config: ModelConfig, *, transport: httpx.BaseTransport | None = None):
         self.config = config
+        self.last_usage = token_usage(None)
         self._client = httpx.Client(timeout=config.timeout_seconds, trust_env=False,
                                     follow_redirects=False, transport=transport)
 
@@ -126,14 +130,16 @@ class ChatCompletionsModel:
         self._client.close()
 
     def decide(self, context: DecisionContext) -> dict:
+        # 每次调用开始即清空，失败时不能复用上一次响应的 token。
+        self.last_usage = token_usage(None)
         snapshot = context.model_dump_json()
         if len(snapshot.encode("utf-8")) > self.MAX_CONTEXT_BYTES:
             raise ModelFailure("context_too_large")
         payload = {
             "model": self.config.model,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT + "\n动作 Schema：\n"
-                 + json.dumps(ACTION.json_schema(), ensure_ascii=False)},
+                {"role": "system", "content": self.system_prompt + "\n动作 Schema：\n"
+                 + json.dumps(self.action_schema.json_schema(), ensure_ascii=False)},
                 {"role": "user", "content": snapshot},
             ],
             "response_format": {"type": "json_object"},
@@ -161,7 +167,14 @@ class ChatCompletionsModel:
                     if monotonic() - started > self.config.timeout_seconds:
                         raise ModelFailure("timeout")
                     chunks.append(chunk)
-            return self._parse(b"".join(chunks))
+            body = b"".join(chunks)
+            try:
+                envelope = json.loads(body)
+                self.last_usage = token_usage(envelope.get("usage") if isinstance(envelope, dict) else None)
+            except (ValueError, RecursionError):
+                pass
+            # 即使动作截断或拒答，已返回的供应商用量仍保留。
+            return self._parse(body)
         except httpx.TimeoutException:
             raise ModelFailure("timeout") from None
         except httpx.HTTPError:

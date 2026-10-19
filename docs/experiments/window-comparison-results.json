@@ -1,0 +1,524 @@
+{
+  "description": "Development acceptance on four shared snapshots; all three rounds retained, not a held-out benchmark.",
+  "rounds": [
+    {
+      "version": "initial",
+      "recorded_at": "2026-10-19T07:41:11.283455+00:00",
+      "model": "deepseek-flash",
+      "max_tool_calls": 6,
+      "completed": true,
+      "recovery_verified": true,
+      "mode": "live_environment",
+      "cases": [
+        {
+          "name": "healthy",
+          "snapshot_id": "62668a32fb8e1dd00d495272b2e776c4f7a241e4ebda574520acb308737a52f7",
+          "expected": "no_anomaly_observed",
+          "reports": {
+            "fixed": {
+              "code": "no_anomaly_observed",
+              "termination": "completed",
+              "passed": true,
+              "references": 12,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 16.00000000325963,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "insufficient_evidence",
+              "termination": "invalid_finding",
+              "passed": false,
+              "references": 0,
+              "usage": {
+                "model_calls": 1,
+                "tool_calls": 1,
+                "drilldown_calls": 0,
+                "elapsed_ms": 2031.0000000026776,
+                "prompt_tokens": 4120,
+                "completion_tokens": 275,
+                "total_tokens": 4395,
+                "unknown_usage_calls": 0
+              },
+              "failure_summary": "字段引用无效或观测不足。"
+            }
+          }
+        },
+        {
+          "name": "pool_wait",
+          "snapshot_id": "4b50910b172e45ff606da8400a4abbc60ba9bed4d18a1786c1afb273c6c92497",
+          "expected": "pre_send_delay",
+          "reports": {
+            "fixed": {
+              "code": "pre_send_delay",
+              "termination": "completed",
+              "passed": true,
+              "references": 12,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 31.000000002677552,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "pre_send_delay",
+              "termination": "completed",
+              "passed": true,
+              "references": 7,
+              "usage": {
+                "model_calls": 2,
+                "tool_calls": 2,
+                "drilldown_calls": 1,
+                "elapsed_ms": 5047.000000005937,
+                "prompt_tokens": 8706,
+                "completion_tokens": 1047,
+                "total_tokens": 9753,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "downstream_slow",
+          "snapshot_id": "d7953fa34992950e5fba75fca8002f5a2a39a88d4e67da70dd6c9a50051d70d1",
+          "expected": "inventory_latency",
+          "reports": {
+            "fixed": {
+              "code": "inventory_latency",
+              "termination": "completed",
+              "passed": true,
+              "references": 12,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 31.000000002677552,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "inventory_latency",
+              "termination": "completed",
+              "passed": true,
+              "references": 6,
+              "usage": {
+                "model_calls": 2,
+                "tool_calls": 2,
+                "drilldown_calls": 1,
+                "elapsed_ms": 4812.000000005355,
+                "prompt_tokens": 8774,
+                "completion_tokens": 974,
+                "total_tokens": 9748,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "slow_and_pool_timeout",
+          "snapshot_id": "cf7c6342d5d6081ce6e1daaf000900c808bb6f8cca26ae838d54233f9631519f",
+          "expected": "inventory_latency_with_pool_contention",
+          "reports": {
+            "fixed": {
+              "code": "inventory_latency_with_pool_contention",
+              "termination": "completed",
+              "passed": true,
+              "references": 17,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 4,
+                "drilldown_calls": 3,
+                "elapsed_ms": 14.999999999417923,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "inventory_latency_with_pool_contention",
+              "termination": "completed",
+              "passed": true,
+              "references": 8,
+              "usage": {
+                "model_calls": 3,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 6500.0,
+                "prompt_tokens": 13671,
+                "completion_tokens": 1190,
+                "total_tokens": 14861,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "version": "prompt_clarified",
+      "recorded_at": "2026-10-19T07:43:42.986157+00:00",
+      "model": "deepseek-flash",
+      "max_tool_calls": 6,
+      "completed": true,
+      "recovery_verified": null,
+      "mode": "snapshot_replay",
+      "cases": [
+        {
+          "name": "healthy",
+          "snapshot_id": "62668a32fb8e1dd00d495272b2e776c4f7a241e4ebda574520acb308737a52f7",
+          "expected": "no_anomaly_observed",
+          "reports": {
+            "fixed": {
+              "code": "no_anomaly_observed",
+              "termination": "completed",
+              "passed": true,
+              "references": 12,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "no_anomaly_observed",
+              "termination": "completed",
+              "passed": true,
+              "references": 5,
+              "usage": {
+                "model_calls": 4,
+                "tool_calls": 4,
+                "drilldown_calls": 3,
+                "elapsed_ms": 5812.000000005355,
+                "prompt_tokens": 19968,
+                "completion_tokens": 803,
+                "total_tokens": 20771,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "pool_wait",
+          "snapshot_id": "4b50910b172e45ff606da8400a4abbc60ba9bed4d18a1786c1afb273c6c92497",
+          "expected": "pre_send_delay",
+          "reports": {
+            "fixed": {
+              "code": "pre_send_delay",
+              "termination": "completed",
+              "passed": true,
+              "references": 12,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "insufficient_evidence",
+              "termination": "invalid_finding",
+              "passed": false,
+              "references": 0,
+              "usage": {
+                "model_calls": 5,
+                "tool_calls": 5,
+                "drilldown_calls": 4,
+                "elapsed_ms": 29172.000000005937,
+                "prompt_tokens": 26009,
+                "completion_tokens": 1480,
+                "total_tokens": 27489,
+                "unknown_usage_calls": 0
+              },
+              "failure_summary": "结论校验失败：invalid_reference。",
+              "rejected_code": "pre_send_delay",
+              "rejected_fields": [
+                "client.in_flight_at_start",
+                "client.pre_send_ms",
+                "duration_ms"
+              ]
+            }
+          }
+        },
+        {
+          "name": "downstream_slow",
+          "snapshot_id": "d7953fa34992950e5fba75fca8002f5a2a39a88d4e67da70dd6c9a50051d70d1",
+          "expected": "inventory_latency",
+          "reports": {
+            "fixed": {
+              "code": "inventory_latency",
+              "termination": "completed",
+              "passed": true,
+              "references": 12,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "inventory_latency",
+              "termination": "completed",
+              "passed": true,
+              "references": 10,
+              "usage": {
+                "model_calls": 6,
+                "tool_calls": 6,
+                "drilldown_calls": 5,
+                "elapsed_ms": 8577.999999994063,
+                "prompt_tokens": 33255,
+                "completion_tokens": 1399,
+                "total_tokens": 34654,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "slow_and_pool_timeout",
+          "snapshot_id": "cf7c6342d5d6081ce6e1daaf000900c808bb6f8cca26ae838d54233f9631519f",
+          "expected": "inventory_latency_with_pool_contention",
+          "reports": {
+            "fixed": {
+              "code": "inventory_latency_with_pool_contention",
+              "termination": "completed",
+              "passed": true,
+              "references": 17,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 4,
+                "drilldown_calls": 3,
+                "elapsed_ms": 16.00000000325963,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "insufficient_evidence",
+              "termination": "invalid_finding",
+              "passed": false,
+              "references": 0,
+              "usage": {
+                "model_calls": 3,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 5781.999999991967,
+                "prompt_tokens": 13854,
+                "completion_tokens": 953,
+                "total_tokens": 14807,
+                "unknown_usage_calls": 0
+              },
+              "failure_summary": "结论校验失败：invalid_reference。",
+              "rejected_code": "inventory_latency_with_pool_contention",
+              "rejected_fields": [
+                "client.max_connections",
+                "client.pre_send_ms",
+                "duration_ms",
+                "tags.client.in_flight_at_start",
+                "tags.client.request_headers_started",
+                "tags.error.type"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "version": "explicit_reference_paths",
+      "recorded_at": "2026-10-19T07:45:45.493209+00:00",
+      "model": "deepseek-flash",
+      "max_tool_calls": 6,
+      "completed": true,
+      "recovery_verified": null,
+      "mode": "snapshot_replay",
+      "cases": [
+        {
+          "name": "healthy",
+          "snapshot_id": "62668a32fb8e1dd00d495272b2e776c4f7a241e4ebda574520acb308737a52f7",
+          "expected": "no_anomaly_observed",
+          "reports": {
+            "fixed": {
+              "code": "no_anomaly_observed",
+              "termination": "completed",
+              "passed": true,
+              "references": 12,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "no_anomaly_observed",
+              "termination": "completed",
+              "passed": true,
+              "references": 19,
+              "usage": {
+                "model_calls": 5,
+                "tool_calls": 5,
+                "drilldown_calls": 4,
+                "elapsed_ms": 9296.000000002095,
+                "prompt_tokens": 28214,
+                "completion_tokens": 2052,
+                "total_tokens": 30266,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "pool_wait",
+          "snapshot_id": "4b50910b172e45ff606da8400a4abbc60ba9bed4d18a1786c1afb273c6c92497",
+          "expected": "pre_send_delay",
+          "reports": {
+            "fixed": {
+              "code": "pre_send_delay",
+              "termination": "completed",
+              "passed": true,
+              "references": 12,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "pre_send_delay",
+              "termination": "completed",
+              "passed": true,
+              "references": 12,
+              "usage": {
+                "model_calls": 3,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 6531.000000002678,
+                "prompt_tokens": 14695,
+                "completion_tokens": 1448,
+                "total_tokens": 16143,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "downstream_slow",
+          "snapshot_id": "d7953fa34992950e5fba75fca8002f5a2a39a88d4e67da70dd6c9a50051d70d1",
+          "expected": "inventory_latency",
+          "reports": {
+            "fixed": {
+              "code": "inventory_latency",
+              "termination": "completed",
+              "passed": true,
+              "references": 12,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "inventory_latency",
+              "termination": "completed",
+              "passed": true,
+              "references": 7,
+              "usage": {
+                "model_calls": 5,
+                "tool_calls": 5,
+                "drilldown_calls": 4,
+                "elapsed_ms": 7750.0,
+                "prompt_tokens": 28288,
+                "completion_tokens": 1130,
+                "total_tokens": 29418,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "slow_and_pool_timeout",
+          "snapshot_id": "cf7c6342d5d6081ce6e1daaf000900c808bb6f8cca26ae838d54233f9631519f",
+          "expected": "inventory_latency_with_pool_contention",
+          "reports": {
+            "fixed": {
+              "code": "inventory_latency_with_pool_contention",
+              "termination": "completed",
+              "passed": true,
+              "references": 17,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 4,
+                "drilldown_calls": 3,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "code": "inventory_latency_with_pool_contention",
+              "termination": "completed",
+              "passed": true,
+              "references": 14,
+              "usage": {
+                "model_calls": 5,
+                "tool_calls": 5,
+                "drilldown_calls": 4,
+                "elapsed_ms": 9312.000000005355,
+                "prompt_tokens": 27085,
+                "completion_tokens": 1735,
+                "total_tokens": 28820,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

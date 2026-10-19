@@ -14,7 +14,8 @@
 - [x] 首版固定排查流程与四个只读证据工具；已有结构化证据和接口边界，尚非进程级隔离。
 - [x] 最小调查执行器：结构化动作、工具白名单、调用次数预算与证据引用校验。
 - [x] DeepSeek V4.1 Flash 适配器与 CLI：已完成模拟 HTTP 测试和一次真实五场景验收，库存停止时合理拒答。
-- [x] 真实 HTTP 连接池竞争实验：七组并发/低负载/慢下游对照，已验证发送前延迟、PoolTimeout 和恢复；新场景尚未接入调查策略。
+- [x] 真实 HTTP 连接池竞争实验：七组并发/低负载/慢下游对照，已验证发送前延迟、PoolTimeout 和恢复。
+- [x] 冻结窗口接入规则与 Agent：绑定输入、字段引用校验、调用/token 用量及四场景对照入口。
 - [ ] 假设管理、重复查询控制与累计 token/时间预算。
 - [ ] 服务化工作台、审批处置、批量评测。
 
@@ -26,7 +27,15 @@
 
 2026-10-18 新增 10 项测试，全部 55 项本地测试通过；真实 Jaeger 三组共 75 个窗口请求（含预热）验收通过，业务恢复已确认。验收入口为 `python -m evals.run_window_evidence`，独立检查正常、小池、慢下游叠加池超时三组请求及最终业务恢复，结果见 [窗口验收记录](docs/experiments/window-evidence.md)。实验独占本地 Compose 环境，会调整并恢复配置。
 
-现有规则/Agent 循环仍使用单 Trace，尚未接入窗口诊断、假设管理或累计模型 token 用量。窗口工具记录单次调用与耗时；快照保存完整受限投影，不保存任意原始标签。
+新增窗口规则与 Agent 入口，共享快照、摘要、请求索引和默认六次工具调用上限；确定性结论要求引用已下钻的具体字段。窗口报告记录模型/工具调用、token、耗时与终止原因，缺失 token 记为未知。原单 Trace 入口继续保留。假设管理与累计 token/时间预算仍未实现。设计见 [窗口调查协议](docs/decisions/007-window-investigation.md)，真实结果与失败复盘见 [四场景对照](docs/experiments/window-comparison.md)。
+
+```powershell
+# snapshot_id 来自 window_cli query 输出；默认 fixed 无需模型
+.\.venv\Scripts\python.exe -m backend.investigation.window_cli investigate <snapshot_id> --strategy fixed
+.\.venv\Scripts\python.exe -m backend.investigation.window_cli investigate <snapshot_id> --strategy agent --output window-agent.private.json
+# 独占实验环境；both 使用真实模型，完整报告默认不提交
+.\.venv\Scripts\python.exe -m evals.run_window_comparison --strategy both
+```
 
 ## 固定流程调查（无需模型）
 
@@ -91,7 +100,7 @@ docker compose build
 
 七组条件各采集 24 个请求，比较正常/慢库存、不同连接池上限及低负载。实测小池组库存 P95 约 83 ms、发送前 P95 约 572 ms；慢下游宽池组库存 P95 约 503 ms、发送前约 7 ms。慢下游叠加池竞争时 24 请求中 12 次 PoolTimeout，而小池在低负载下全部成功。
 
-结果和限制见 [连接池实验](docs/experiments/pool-experiment.md)。`client.pre_send_ms` 包含排队、建连和调度，不能当成纯连接池等待时间。成功请求与超时请求须一起分析；当前调查工具与 Agent 尚未扩展到该场景。
+结果和限制见 [连接池实验](docs/experiments/pool-experiment.md)。`client.pre_send_ms` 包含排队、建连和调度，不能当成纯连接池等待时间。成功请求与超时请求须一起分析；新窗口策略已接入这些观测，原单 Trace 策略保持原有能力。
 
 手动可设置 `INVENTORY_MAX_CONNECTIONS`（默认 100）与 `INVENTORY_POOL_TIMEOUT_MS`（默认 2000）。实验脚本会恢复默认池配置、正确地址和零延迟，并检查业务恢复；它们使用独占本地实验环境，不要并行执行。结果文件 `pool-results.json` 包含场景真值，不可作为 Agent 输入。
 
