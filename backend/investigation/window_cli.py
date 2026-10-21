@@ -10,6 +10,8 @@ from .model import ModelConfig, ModelConfigError
 from .window_model import WindowChatModel
 from .window_baseline import investigate_window_fixed
 from .window_investigation import investigate_window_agent
+from .hypothesis_agent import investigate_hypotheses
+from .hypothesis_model import HypothesisChatModel
 
 
 def main():
@@ -25,7 +27,7 @@ def main():
     trace.add_argument("trace_id")
     investigate = commands.add_parser("investigate")
     investigate.add_argument("snapshot_id")
-    investigate.add_argument("--strategy", choices=("fixed", "agent"), default="fixed")
+    investigate.add_argument("--strategy", choices=("fixed", "agent", "hypotheses"), default="fixed")
     investigate.add_argument("--max-tool-calls", type=int, choices=range(1, 101), default=6)
     investigate.add_argument("--output", type=Path)
     args = parser.parse_args()
@@ -35,13 +37,15 @@ def main():
     elif args.command == "trace":
         evidence = tools.get_snapshot_trace(args.snapshot_id, args.trace_id)
     else:
-        if args.strategy == "agent":
+        if args.strategy in ("agent", "hypotheses"):
             try:
                 config = ModelConfig.from_env()
             except ModelConfigError as exc:
                 parser.error(str(exc))
-            with WindowChatModel(config) as model:
-                result = investigate_window_agent(tools.store, args.snapshot_id, model, args.max_tool_calls)
+            adapter = HypothesisChatModel if args.strategy == "hypotheses" else WindowChatModel
+            runner = investigate_hypotheses if args.strategy == "hypotheses" else investigate_window_agent
+            with adapter(config) as model:
+                result = runner(tools.store, args.snapshot_id, model, args.max_tool_calls)
         else:
             result = investigate_window_fixed(tools.store, args.snapshot_id, args.max_tool_calls)
         output = result.model_dump_json(indent=2)

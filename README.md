@@ -16,7 +16,8 @@
 - [x] DeepSeek V4.1 Flash 适配器与 CLI：已完成模拟 HTTP 测试和一次真实五场景验收，库存停止时合理拒答。
 - [x] 真实 HTTP 连接池竞争实验：七组并发/低负载/慢下游对照，已验证发送前延迟、PoolTimeout 和恢复。
 - [x] 冻结窗口接入规则与 Agent：绑定输入、字段引用校验、调用/token 用量及四场景对照入口。
-- [ ] 假设管理、重复查询控制与累计 token/时间预算。
+- [x] 显式假设策略：版本历史、支持/反证字段、查询目的与结论关联；提供同快照三策略回放。
+- [ ] 重复查询控制与累计 token/时间预算。
 - [ ] 服务化工作台、审批处置、批量评测。
 
 目前已完成最小故障实验环境、规则基线和最小模型调查闭环；五场景验收不代表完整评测体系或泛化能力。
@@ -27,12 +28,15 @@
 
 2026-10-18 新增 10 项测试，全部 55 项本地测试通过；真实 Jaeger 三组共 75 个窗口请求（含预热）验收通过，业务恢复已确认。验收入口为 `python -m evals.run_window_evidence`，独立检查正常、小池、慢下游叠加池超时三组请求及最终业务恢复，结果见 [窗口验收记录](docs/experiments/window-evidence.md)。实验独占本地 Compose 环境，会调整并恢复配置。
 
-新增窗口规则与 Agent 入口，共享快照、摘要、请求索引和默认六次工具调用上限；确定性结论要求引用已下钻的具体字段。窗口报告记录模型/工具调用、token、耗时与终止原因，缺失 token 记为未知。原单 Trace 入口继续保留。假设管理与累计 token/时间预算仍未实现。设计见 [窗口调查协议](docs/decisions/007-window-investigation.md)，真实结果与失败复盘见 [四场景对照](docs/experiments/window-comparison.md)。
+新增窗口规则与 Agent 入口，共享快照、摘要、请求索引和默认六次工具调用上限；确定性结论要求引用已下钻的具体字段。窗口报告记录模型/工具调用、token、耗时与终止原因，缺失 token 记为未知。原单 Trace 入口继续保留。设计见 [窗口调查协议](docs/decisions/007-window-investigation.md)，真实结果与失败复盘见 [四场景对照](docs/experiments/window-comparison.md)。
+
+新增 `hypotheses` 策略，在同一快照上维护假设版本、支持与反证、待检查项及查询目的，最终结论关联具体假设版本和观测字段。非法更新整批拒绝，保留已有状态。结构校验不证明语义或因果正确；累计 token/时间预算和进程恢复尚未实现。设计与命令见 [显式假设协议](docs/decisions/008-hypothesis-investigation.md)，真实失败与结果见 [假设策略对照](docs/experiments/hypothesis-comparison.md)。
 
 ```powershell
 # snapshot_id 来自 window_cli query 输出；默认 fixed 无需模型
 .\.venv\Scripts\python.exe -m backend.investigation.window_cli investigate <snapshot_id> --strategy fixed
 .\.venv\Scripts\python.exe -m backend.investigation.window_cli investigate <snapshot_id> --strategy agent --output window-agent.private.json
+.\.venv\Scripts\python.exe -m backend.investigation.window_cli investigate <snapshot_id> --strategy hypotheses --output hypothesis.private.json
 # 独占实验环境；both 使用真实模型，完整报告默认不提交
 .\.venv\Scripts\python.exe -m evals.run_window_comparison --strategy both
 ```

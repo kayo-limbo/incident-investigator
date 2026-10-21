@@ -176,9 +176,13 @@ class FrozenWindowSession:
     def validate_finding(self, finding):
         if finding.code != "insufficient_evidence" and (not self.usable or not finding.references):
             raise ValueError("insufficient_observations")
+        self.validate_references(finding.references)
+
+    def validate_references(self, references):
+        """仅允许本会话已下钻、绑定快照中真实存在且不重复的字段。"""
         seen = {e.data["trace_id"] for e in self.evidence if e.tool == "get_snapshot_trace" and e.status == "ok"}
         keys = set()
-        for ref in finding.references:
+        for ref in references:
             key = (ref.snapshot_id, ref.trace_id, ref.span_id, ref.field)
             if key in keys or ref.snapshot_id != self.snapshot_id or ref.trace_id not in seen:
                 raise ValueError("invalid_reference")

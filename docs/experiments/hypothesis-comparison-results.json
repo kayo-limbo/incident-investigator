@@ -1,0 +1,408 @@
+{
+  "recorded_date": "2026-10-21",
+  "mode": "same_development_snapshots",
+  "scenario_count": 4,
+  "unit_tests_passed": 83,
+  "rounds": [
+    {
+      "model": "deepseek-flash",
+      "max_tool_calls": 6,
+      "max_output_tokens": 2048,
+      "timeout_seconds": 30.0,
+      "environment_modified": false,
+      "round": 1,
+      "totals": {
+        "fixed": {
+          "model_calls": 0,
+          "tool_calls": 13,
+          "drilldown_calls": 9,
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 142.0,
+          "passed": 4
+        },
+        "agent": {
+          "model_calls": 20,
+          "tool_calls": 20,
+          "drilldown_calls": 16,
+          "prompt_tokens": 111969,
+          "completion_tokens": 7209,
+          "total_tokens": 119178,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 35983.0,
+          "passed": 4
+        },
+        "hypotheses": {
+          "model_calls": 9,
+          "tool_calls": 9,
+          "drilldown_calls": 5,
+          "prompt_tokens": 54208,
+          "completion_tokens": 6064,
+          "total_tokens": 60272,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 27765.0,
+          "passed": 0
+        }
+      },
+      "cases": [
+        {
+          "name": "healthy",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": false
+          },
+          "hypothesis_termination": "model_error",
+          "hypothesis_code": "insufficient_evidence",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": null,
+          "hypothesis_model_errors": [
+            "invalid_response"
+          ]
+        },
+        {
+          "name": "pool_wait",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": false
+          },
+          "hypothesis_termination": "invalid_action",
+          "hypothesis_code": "insufficient_evidence",
+          "hypothesis_validation_error": "invalid_schema",
+          "hypothesis_validation_issues": null,
+          "hypothesis_model_errors": []
+        },
+        {
+          "name": "downstream_slow",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": false
+          },
+          "hypothesis_termination": "invalid_finding",
+          "hypothesis_code": "insufficient_evidence",
+          "hypothesis_validation_error": "claim_reference_not_linked",
+          "hypothesis_validation_issues": null,
+          "hypothesis_model_errors": []
+        },
+        {
+          "name": "slow_and_pool_timeout",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": false
+          },
+          "hypothesis_termination": "invalid_action",
+          "hypothesis_code": "insufficient_evidence",
+          "hypothesis_validation_error": "invalid_schema",
+          "hypothesis_validation_issues": null,
+          "hypothesis_model_errors": []
+        }
+      ]
+    },
+    {
+      "model": "deepseek-flash",
+      "max_tool_calls": 6,
+      "max_output_tokens": 2048,
+      "timeout_seconds": 30.0,
+      "environment_modified": false,
+      "round": 2,
+      "totals": {
+        "fixed": {
+          "model_calls": 0,
+          "tool_calls": 13,
+          "drilldown_calls": 9,
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 15.0,
+          "passed": 4
+        },
+        "agent": {
+          "model_calls": 20,
+          "tool_calls": 20,
+          "drilldown_calls": 16,
+          "prompt_tokens": 113317,
+          "completion_tokens": 6046,
+          "total_tokens": 119363,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 32313.0,
+          "passed": 4
+        },
+        "hypotheses": {
+          "model_calls": 6,
+          "tool_calls": 6,
+          "drilldown_calls": 2,
+          "prompt_tokens": 34041,
+          "completion_tokens": 4717,
+          "total_tokens": 38758,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 20048.0,
+          "passed": 0
+        }
+      },
+      "cases": [
+        {
+          "name": "healthy",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": false
+          },
+          "hypothesis_termination": "model_error",
+          "hypothesis_code": "insufficient_evidence",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": [],
+          "hypothesis_model_errors": [
+            "invalid_response"
+          ]
+        },
+        {
+          "name": "pool_wait",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": false
+          },
+          "hypothesis_termination": "completed",
+          "hypothesis_code": "inventory_latency_with_pool_contention",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": [],
+          "hypothesis_model_errors": []
+        },
+        {
+          "name": "downstream_slow",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": false
+          },
+          "hypothesis_termination": "model_error",
+          "hypothesis_code": "insufficient_evidence",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": [],
+          "hypothesis_model_errors": [
+            "invalid_response"
+          ]
+        },
+        {
+          "name": "slow_and_pool_timeout",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": false
+          },
+          "hypothesis_termination": "invalid_action",
+          "hypothesis_code": "insufficient_evidence",
+          "hypothesis_validation_error": "invalid_schema",
+          "hypothesis_validation_issues": [
+            "tool.updates.0.version:extra_forbidden"
+          ],
+          "hypothesis_model_errors": []
+        }
+      ]
+    },
+    {
+      "model": "deepseek-flash",
+      "max_tool_calls": 6,
+      "max_output_tokens": 2048,
+      "timeout_seconds": 30.0,
+      "environment_modified": false,
+      "round": 3,
+      "totals": {
+        "fixed": {
+          "model_calls": 0,
+          "tool_calls": 13,
+          "drilldown_calls": 9,
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 0.0,
+          "passed": 4
+        },
+        "agent": {
+          "model_calls": 22,
+          "tool_calls": 22,
+          "drilldown_calls": 18,
+          "prompt_tokens": 127314,
+          "completion_tokens": 6718,
+          "total_tokens": 134032,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 36344.0,
+          "passed": 3
+        },
+        "hypotheses": {
+          "model_calls": 11,
+          "tool_calls": 11,
+          "drilldown_calls": 7,
+          "prompt_tokens": 66527,
+          "completion_tokens": 7318,
+          "total_tokens": 73845,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 32391.0,
+          "passed": 2
+        }
+      },
+      "cases": [
+        {
+          "name": "healthy",
+          "passed": {
+            "fixed": true,
+            "agent": false,
+            "hypotheses": true
+          },
+          "hypothesis_termination": "completed",
+          "hypothesis_code": "no_anomaly_observed",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": [],
+          "hypothesis_model_errors": []
+        },
+        {
+          "name": "pool_wait",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": false
+          },
+          "hypothesis_termination": "model_error",
+          "hypothesis_code": "insufficient_evidence",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": [],
+          "hypothesis_model_errors": [
+            "invalid_response"
+          ]
+        },
+        {
+          "name": "downstream_slow",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": true
+          },
+          "hypothesis_termination": "completed",
+          "hypothesis_code": "inventory_latency",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": [],
+          "hypothesis_model_errors": []
+        },
+        {
+          "name": "slow_and_pool_timeout",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": false
+          },
+          "hypothesis_termination": "invalid_action",
+          "hypothesis_code": "insufficient_evidence",
+          "hypothesis_validation_error": "invalid_schema",
+          "hypothesis_validation_issues": [
+            "finish.updates.0.version:extra_forbidden"
+          ],
+          "hypothesis_model_errors": []
+        }
+      ]
+    },
+    {
+      "model": "deepseek-flash",
+      "max_tool_calls": 6,
+      "max_output_tokens": 2048,
+      "timeout_seconds": 30.0,
+      "environment_modified": false,
+      "round": 4,
+      "totals": {
+        "fixed": {
+          "model_calls": 0,
+          "tool_calls": 13,
+          "drilldown_calls": 9,
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 0.0,
+          "passed": 4
+        },
+        "agent": {
+          "model_calls": 22,
+          "tool_calls": 22,
+          "drilldown_calls": 18,
+          "prompt_tokens": 127236,
+          "completion_tokens": 6918,
+          "total_tokens": 134154,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 35985.0,
+          "passed": 3
+        },
+        "hypotheses": {
+          "model_calls": 10,
+          "tool_calls": 10,
+          "drilldown_calls": 6,
+          "prompt_tokens": 58936,
+          "completion_tokens": 7480,
+          "total_tokens": 66416,
+          "unknown_usage_calls": 0,
+          "elapsed_ms": 30547.0,
+          "passed": 4
+        }
+      },
+      "cases": [
+        {
+          "name": "healthy",
+          "passed": {
+            "fixed": true,
+            "agent": false,
+            "hypotheses": true
+          },
+          "hypothesis_termination": "completed",
+          "hypothesis_code": "no_anomaly_observed",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": [],
+          "hypothesis_model_errors": []
+        },
+        {
+          "name": "pool_wait",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": true
+          },
+          "hypothesis_termination": "completed",
+          "hypothesis_code": "pre_send_delay",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": [],
+          "hypothesis_model_errors": []
+        },
+        {
+          "name": "downstream_slow",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": true
+          },
+          "hypothesis_termination": "completed",
+          "hypothesis_code": "inventory_latency",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": [],
+          "hypothesis_model_errors": []
+        },
+        {
+          "name": "slow_and_pool_timeout",
+          "passed": {
+            "fixed": true,
+            "agent": true,
+            "hypotheses": true
+          },
+          "hypothesis_termination": "completed",
+          "hypothesis_code": "inventory_latency_with_pool_contention",
+          "hypothesis_validation_error": null,
+          "hypothesis_validation_issues": [],
+          "hypothesis_model_errors": []
+        }
+      ]
+    }
+  ]
+}
