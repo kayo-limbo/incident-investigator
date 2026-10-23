@@ -1,0 +1,107 @@
+{
+  "recorded_date": "2026-10-23",
+  "mode": "new_parameters_same_topology",
+  "protocol_fingerprint": {
+    "backend/investigation/__main__.py": "7db24de70f14b250c7a5c097257099d0cc46aca7f93f1367fa8ad39775623308",
+    "backend/investigation/agent.py": "22e0b2f7040a93f089110674bc20ce6f3b71288d6bd0d061063b3db7140c1682",
+    "backend/investigation/baseline.py": "5bab51aec7458a3797d8b18081ef0370306be202e6015cb6367c6634a38e3aad",
+    "backend/investigation/evidence_models.py": "2bea03130f7f169ce8bb817f6812768de0fb72bcb810feaa2d8327f98c2d107c",
+    "backend/investigation/hypotheses.py": "53e978d39c40af4d8927508a162222df5e0ae36b2e88cbecf051f948632e2030",
+    "backend/investigation/hypothesis_agent.py": "5c8affa1ff5f28a440388fc30eba63f378431cab9b6d378d31b9c632e2b4ca7f",
+    "backend/investigation/hypothesis_model.py": "88bdf336357f2f844ce02ae52924f4fd2e1805818506b1426550411967a3f5b3",
+    "backend/investigation/model.py": "fbf331ec2a88e9115040f8c26511eeb1762cc748a4ffa95c54e7b3f6a59482fd",
+    "backend/investigation/models.py": "a187265f13d2a5dc487f2165709e47d97133798de719e412998ef5694013a39f",
+    "backend/investigation/snapshot_store.py": "867987146f2a7b67c81cde0f35eae23a6489763eb1bd5de53440209f131d771a",
+    "backend/investigation/tools.py": "be4603c0bc08eeec221d772ee301e7bbdb25505a0db226a16885f22798507dfd",
+    "backend/investigation/usage.py": "608b49206045173fdc84d4dee11a82e493cb094ac5f0162dfcc0fc02cf32a1e6",
+    "backend/investigation/window_baseline.py": "9c597fe09e6577ea68360a36e2216894c08e10e8b72faf0e510e41d0db1eff6d",
+    "backend/investigation/window_cli.py": "9ed3580d07e1b7f18d8162f57d389eba0ed0cc4c65a3b3a6693311ef9750ca6f",
+    "backend/investigation/window_investigation.py": "cc54b2b63f5fd0fc5247984cdb2174c4bd60ad2174ead377f15370b90d869d7f",
+    "backend/investigation/window_model.py": "81deb4d469a1b57ff749e4bcaf057c78b0bd6cc075f1761e1696242a76521f35",
+    "backend/investigation/window_queries.py": "c97345f2884d8cc79f91061bed99510f536bb02cb84b315bfc75f03390b9dad1",
+    "evals/run_holdout.py": "7291072dcd6dc258a6da99c6f388db997fb34ce20fae387a5dfded03fbee02fe",
+    "evals/run_hypothesis_comparison.py": "e6d325f74e4578202be9f93e02b4dfc47769081edb1bbbb543525526405742a8",
+    "evals/run_window_comparison.py": "2ad0f03649a394481336a2f5c8f338575ac1c11109ccfcdaa87fb4bfd81009e0",
+    "lab/run_pool_experiment.py": "98d45b194fa35f631ddbab8ff9778d8a181735bbba0b7d0100aa19872a1d836e",
+    "lab/run_trace_experiment.py": "a9d1ee3c181213e91b9a078c5cbe84337defd37007e8b7e6511686d1f8994c7b",
+    "lab/run_delay_experiment.py": "38daad544400d202324240750256c86aa3405c0523e5437a1fe6f2642c15f18d"
+  },
+  "collection_completed": true,
+  "recovery_verified": true,
+  "requests_per_case_excluding_warmup": 18,
+  "window_requests_per_case": 19,
+  "unit_tests_passed": 88,
+  "cases": [
+    {
+      "name": "small_pool_low_load",
+      "expected": "no_anomaly_observed",
+      "business_summary": {
+        "requests": 18,
+        "successes": 18,
+        "pool_timeouts": 0,
+        "orders_p95_ms": 47.9,
+        "inventory_p95_ms": 42.738,
+        "pre_send_success_p95_ms": 0.5509249999988697,
+        "peak_in_flight_at_start": 1
+      },
+      "fixed_passed": true
+    },
+    {
+      "name": "queue_under_load",
+      "expected": "pre_send_delay",
+      "business_summary": {
+        "requests": 18,
+        "successes": 18,
+        "pool_timeouts": 0,
+        "orders_p95_ms": 381.222,
+        "inventory_p95_ms": 62.229,
+        "pre_send_success_p95_ms": 315.8842429999993,
+        "peak_in_flight_at_start": 6
+      },
+      "fixed_passed": true
+    },
+    {
+      "name": "slower_inventory",
+      "expected": "inventory_latency",
+      "business_summary": {
+        "requests": 18,
+        "successes": 18,
+        "pool_timeouts": 0,
+        "orders_p95_ms": 362.098,
+        "inventory_p95_ms": 352.266,
+        "pre_send_success_p95_ms": 4.290432999994209,
+        "peak_in_flight_at_start": 6
+      },
+      "fixed_passed": true
+    },
+    {
+      "name": "fast_inventory_pool_timeout",
+      "expected": "pool_contention",
+      "business_summary": {
+        "requests": 18,
+        "successes": 3,
+        "pool_timeouts": 15,
+        "orders_p95_ms": 109.402,
+        "inventory_p95_ms": 91.572,
+        "pre_send_success_p95_ms": 1.207426000007672,
+        "peak_in_flight_at_start": 6
+      },
+      "fixed_passed": true
+    },
+    {
+      "name": "slow_inventory_pool_timeout",
+      "expected": "inventory_latency_with_pool_contention",
+      "business_summary": {
+        "requests": 18,
+        "successes": 6,
+        "pool_timeouts": 12,
+        "orders_p95_ms": 359.309,
+        "inventory_p95_ms": 352.402,
+        "pre_send_success_p95_ms": 3.491623999991589,
+        "peak_in_flight_at_start": 6
+      },
+      "fixed_passed": true
+    }
+  ],
+  "model_trials": []
+}

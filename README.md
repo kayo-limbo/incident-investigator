@@ -41,6 +41,8 @@
 .\.venv\Scripts\python.exe -m evals.run_window_comparison --strategy both
 ```
 
+固定协议的新参数验收入口已加入：采集前记录五组计划与代码指纹，独立检查真实观测及业务恢复，再对冻结快照执行预定次数的三策略回放。新增测试覆盖协议变化拒绝、场景未出现、失败轮保留和采集失败后的恢复；方法与命令见 [固定协议验收](docs/decisions/009-fixed-protocol-evaluation.md)。2026-10-23 已采集 95 条窗口请求，五组独立业务检查与规则验收通过、业务恢复通过，全量 88 项测试通过；模型对照尚未运行，详见 [新参数验收记录](docs/experiments/holdout-evaluation.md)。
+
 ## 固定流程调查（无需模型）
 
 模型无关的调查执行器已提供 `backend.investigation.agent.investigate_agent` Python 接口。命令行默认运行固定流程，`--strategy agent` 启用 DeepSeek。执行器的接口、预算与实际限制见 [最小调查执行循环](docs/decisions/003-bounded-agent-loop.md)；执行器测试通过不代表模型诊断能力已验证。
