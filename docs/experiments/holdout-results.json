@@ -103,5 +103,718 @@
       "fixed_passed": true
     }
   ],
-  "model_trials": []
+  "model_trials": [
+    {
+      "model": "deepseek-flash",
+      "max_tool_calls": 6,
+      "max_output_tokens": 2048,
+      "timeout_seconds": 30.0,
+      "environment_modified": false,
+      "trial": 1,
+      "cases": [
+        {
+          "name": "small_pool_low_load",
+          "expected": "no_anomaly_observed",
+          "strategies": {
+            "fixed": {
+              "passed": true,
+              "termination": "completed",
+              "code": "no_anomaly_observed",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 14.999999999417923,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "passed": false,
+              "termination": "completed",
+              "code": "inventory_latency",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 4,
+                "tool_calls": 4,
+                "drilldown_calls": 3,
+                "elapsed_ms": 6860.000000000582,
+                "prompt_tokens": 18690,
+                "completion_tokens": 961,
+                "total_tokens": 19651,
+                "unknown_usage_calls": 0
+              }
+            },
+            "hypotheses": {
+              "passed": true,
+              "termination": "completed",
+              "code": "no_anomaly_observed",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 2,
+                "tool_calls": 2,
+                "drilldown_calls": 1,
+                "elapsed_ms": 6671.999999991385,
+                "prompt_tokens": 10042,
+                "completion_tokens": 1313,
+                "total_tokens": 11355,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "queue_under_load",
+          "expected": "pre_send_delay",
+          "strategies": {
+            "fixed": {
+              "passed": true,
+              "termination": "completed",
+              "code": "pre_send_delay",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "passed": true,
+              "termination": "completed",
+              "code": "pre_send_delay",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 5,
+                "tool_calls": 5,
+                "drilldown_calls": 4,
+                "elapsed_ms": 10610.000000000582,
+                "prompt_tokens": 25044,
+                "completion_tokens": 1944,
+                "total_tokens": 26988,
+                "unknown_usage_calls": 0
+              }
+            },
+            "hypotheses": {
+              "passed": true,
+              "termination": "completed",
+              "code": "pre_send_delay",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 2,
+                "tool_calls": 2,
+                "drilldown_calls": 1,
+                "elapsed_ms": 6983.99999999674,
+                "prompt_tokens": 10045,
+                "completion_tokens": 1367,
+                "total_tokens": 11412,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "slower_inventory",
+          "expected": "inventory_latency",
+          "strategies": {
+            "fixed": {
+              "passed": true,
+              "termination": "completed",
+              "code": "inventory_latency",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "passed": true,
+              "termination": "completed",
+              "code": "inventory_latency",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 5,
+                "tool_calls": 5,
+                "drilldown_calls": 4,
+                "elapsed_ms": 8032.000000006519,
+                "prompt_tokens": 24898,
+                "completion_tokens": 1141,
+                "total_tokens": 26039,
+                "unknown_usage_calls": 0
+              }
+            },
+            "hypotheses": {
+              "passed": false,
+              "termination": "invalid_action",
+              "code": "insufficient_evidence",
+              "validation_error": "invalid_schema",
+              "validation_issues": [
+                "finish.type:extra_forbidden"
+              ],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 3,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 10218.999999997322,
+                "prompt_tokens": 16416,
+                "completion_tokens": 2010,
+                "total_tokens": 18426,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "fast_inventory_pool_timeout",
+          "expected": "pool_contention",
+          "strategies": {
+            "fixed": {
+              "passed": true,
+              "termination": "completed",
+              "code": "pool_contention",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 16.00000000325963,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "passed": true,
+              "termination": "completed",
+              "code": "pool_contention",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 5,
+                "tool_calls": 5,
+                "drilldown_calls": 4,
+                "elapsed_ms": 10156.000000002678,
+                "prompt_tokens": 23813,
+                "completion_tokens": 2012,
+                "total_tokens": 25825,
+                "unknown_usage_calls": 0
+              }
+            },
+            "hypotheses": {
+              "passed": false,
+              "termination": "invalid_finding",
+              "code": "insufficient_evidence",
+              "validation_error": "claim_reference_not_linked",
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": "pool_contention",
+              "usage": {
+                "model_calls": 3,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 10452.999999994063,
+                "prompt_tokens": 15890,
+                "completion_tokens": 2217,
+                "total_tokens": 18107,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "slow_inventory_pool_timeout",
+          "expected": "inventory_latency_with_pool_contention",
+          "strategies": {
+            "fixed": {
+              "passed": true,
+              "termination": "completed",
+              "code": "inventory_latency_with_pool_contention",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 4,
+                "drilldown_calls": 3,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "passed": true,
+              "termination": "completed",
+              "code": "inventory_latency_with_pool_contention",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 5,
+                "tool_calls": 5,
+                "drilldown_calls": 4,
+                "elapsed_ms": 10358.99999999674,
+                "prompt_tokens": 24224,
+                "completion_tokens": 1647,
+                "total_tokens": 25871,
+                "unknown_usage_calls": 0
+              }
+            },
+            "hypotheses": {
+              "passed": true,
+              "termination": "completed",
+              "code": "inventory_latency_with_pool_contention",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 3,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 9360.000000000582,
+                "prompt_tokens": 16087,
+                "completion_tokens": 1745,
+                "total_tokens": 17832,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "model": "deepseek-flash",
+      "max_tool_calls": 6,
+      "max_output_tokens": 2048,
+      "timeout_seconds": 30.0,
+      "environment_modified": false,
+      "trial": 2,
+      "cases": [
+        {
+          "name": "small_pool_low_load",
+          "expected": "no_anomaly_observed",
+          "strategies": {
+            "fixed": {
+              "passed": true,
+              "termination": "completed",
+              "code": "no_anomaly_observed",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "passed": true,
+              "termination": "completed",
+              "code": "no_anomaly_observed",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 5,
+                "tool_calls": 5,
+                "drilldown_calls": 4,
+                "elapsed_ms": 10406.000000002678,
+                "prompt_tokens": 25036,
+                "completion_tokens": 1969,
+                "total_tokens": 27005,
+                "unknown_usage_calls": 0
+              }
+            },
+            "hypotheses": {
+              "passed": false,
+              "termination": "model_error",
+              "code": "insufficient_evidence",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [
+                "invalid_response"
+              ],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 1,
+                "tool_calls": 1,
+                "drilldown_calls": 0,
+                "elapsed_ms": 2812.999999994645,
+                "prompt_tokens": 4501,
+                "completion_tokens": 494,
+                "total_tokens": 4995,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "queue_under_load",
+          "expected": "pre_send_delay",
+          "strategies": {
+            "fixed": {
+              "passed": true,
+              "termination": "completed",
+              "code": "pre_send_delay",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "passed": true,
+              "termination": "completed",
+              "code": "pre_send_delay",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 3,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 7452.999999994063,
+                "prompt_tokens": 12997,
+                "completion_tokens": 1382,
+                "total_tokens": 14379,
+                "unknown_usage_calls": 0
+              }
+            },
+            "hypotheses": {
+              "passed": false,
+              "termination": "invalid_finding",
+              "code": "insufficient_evidence",
+              "validation_error": "claim_reference_not_linked",
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": "pre_send_delay",
+              "usage": {
+                "model_calls": 2,
+                "tool_calls": 2,
+                "drilldown_calls": 1,
+                "elapsed_ms": 6750.0,
+                "prompt_tokens": 10037,
+                "completion_tokens": 1272,
+                "total_tokens": 11309,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "slower_inventory",
+          "expected": "inventory_latency",
+          "strategies": {
+            "fixed": {
+              "passed": true,
+              "termination": "completed",
+              "code": "inventory_latency",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "passed": true,
+              "termination": "completed",
+              "code": "inventory_latency",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 6,
+                "tool_calls": 6,
+                "drilldown_calls": 5,
+                "elapsed_ms": 10610.000000000582,
+                "prompt_tokens": 31927,
+                "completion_tokens": 1621,
+                "total_tokens": 33548,
+                "unknown_usage_calls": 0
+              }
+            },
+            "hypotheses": {
+              "passed": true,
+              "termination": "completed",
+              "code": "inventory_latency",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 2,
+                "tool_calls": 2,
+                "drilldown_calls": 1,
+                "elapsed_ms": 6578.000000008615,
+                "prompt_tokens": 9969,
+                "completion_tokens": 1334,
+                "total_tokens": 11303,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "fast_inventory_pool_timeout",
+          "expected": "pool_contention",
+          "strategies": {
+            "fixed": {
+              "passed": true,
+              "termination": "completed",
+              "code": "pool_contention",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "passed": false,
+              "termination": "completed",
+              "code": "inventory_latency",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 6,
+                "tool_calls": 6,
+                "drilldown_calls": 5,
+                "elapsed_ms": 11014.999999999418,
+                "prompt_tokens": 30761,
+                "completion_tokens": 1944,
+                "total_tokens": 32705,
+                "unknown_usage_calls": 0
+              }
+            },
+            "hypotheses": {
+              "passed": true,
+              "termination": "completed",
+              "code": "pool_contention",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 2,
+                "tool_calls": 2,
+                "drilldown_calls": 1,
+                "elapsed_ms": 7641.00000000326,
+                "prompt_tokens": 9740,
+                "completion_tokens": 1627,
+                "total_tokens": 11367,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        },
+        {
+          "name": "slow_inventory_pool_timeout",
+          "expected": "inventory_latency_with_pool_contention",
+          "strategies": {
+            "fixed": {
+              "passed": true,
+              "termination": "completed",
+              "code": "inventory_latency_with_pool_contention",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 0,
+                "tool_calls": 4,
+                "drilldown_calls": 3,
+                "elapsed_ms": 0.0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "unknown_usage_calls": 0
+              }
+            },
+            "agent": {
+              "passed": true,
+              "termination": "completed",
+              "code": "inventory_latency_with_pool_contention",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 5,
+                "tool_calls": 5,
+                "drilldown_calls": 4,
+                "elapsed_ms": 9500.0,
+                "prompt_tokens": 24114,
+                "completion_tokens": 1537,
+                "total_tokens": 25651,
+                "unknown_usage_calls": 0
+              }
+            },
+            "hypotheses": {
+              "passed": false,
+              "termination": "model_error",
+              "code": "insufficient_evidence",
+              "validation_error": null,
+              "validation_issues": [],
+              "model_error_codes": [
+                "invalid_response"
+              ],
+              "rejected_candidate_code": null,
+              "usage": {
+                "model_calls": 3,
+                "tool_calls": 3,
+                "drilldown_calls": 2,
+                "elapsed_ms": 11625.0,
+                "prompt_tokens": 16395,
+                "completion_tokens": 2223,
+                "total_tokens": 18618,
+                "unknown_usage_calls": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "model_evaluation_date": "2026-10-25",
+  "model_evaluation_completed": true,
+  "protocol_unchanged": true,
+  "model_totals": {
+    "fixed": {
+      "passed": 10,
+      "investigations": 10,
+      "model_calls": 0,
+      "tool_calls": 32,
+      "drilldown_calls": 22,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "total_tokens": 0,
+      "unknown_usage_calls": 0,
+      "elapsed_ms": 31.0,
+      "termination_counts": {
+        "completed": 10
+      },
+      "repeated_drilldowns": 0
+    },
+    "agent": {
+      "passed": 8,
+      "investigations": 10,
+      "model_calls": 49,
+      "tool_calls": 49,
+      "drilldown_calls": 39,
+      "prompt_tokens": 241504,
+      "completion_tokens": 16158,
+      "total_tokens": 257662,
+      "unknown_usage_calls": 0,
+      "elapsed_ms": 95001.0,
+      "termination_counts": {
+        "completed": 10
+      },
+      "repeated_drilldowns": 2
+    },
+    "hypotheses": {
+      "passed": 5,
+      "investigations": 10,
+      "model_calls": 23,
+      "tool_calls": 23,
+      "drilldown_calls": 13,
+      "prompt_tokens": 119122,
+      "completion_tokens": 15602,
+      "total_tokens": 134724,
+      "unknown_usage_calls": 0,
+      "elapsed_ms": 79095.0,
+      "termination_counts": {
+        "completed": 5,
+        "invalid_action": 1,
+        "invalid_finding": 2,
+        "model_error": 2
+      },
+      "repeated_drilldowns": 0
+    }
+  }
 }
