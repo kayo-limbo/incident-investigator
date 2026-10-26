@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from .evidence_models import ObservationRef, WindowQuery
 from .agent import ModelFailure
+from .budget import InvestigationBudget, InvestigationDeadlineExceeded
 from .models import Evidence, TraceQuery
 from .snapshot_store import SnapshotStore
 from .usage import CallUsage, Usage, token_usage
@@ -17,7 +18,7 @@ from .window_queries import summarize
 Code = Literal["no_anomaly_observed", "inventory_latency", "pre_send_delay",
                "pool_contention", "inventory_latency_with_pool_contention", "insufficient_evidence"]
 Termination = Literal["completed", "source_error", "model_error", "invalid_action",
-                      "invalid_finding", "budget_exhausted"]
+                      "invalid_finding", "budget_exhausted", "deadline_exceeded"]
 LIMITATIONS = ["结论仅适用于冻结窗口中的已采集样本，不保证全量覆盖。",
                "发送前耗时包含建连和调度，不能视为纯连接池等待。",
                "引用校验不证明语义正确或唯一根因；请求配置不等于当前配置。"]
@@ -206,12 +207,25 @@ class FrozenWindowSession:
                             usage=self.usage, usage_totals=self.usage.totals()).model_copy(deep=True)
 
 
-def investigate_window_agent(store, snapshot_id, model, max_tool_calls=6):
+def investigate_window_agent(store, snapshot_id, model, max_tool_calls=6, *,
+                             timeout_seconds=120, clock=monotonic):
+    """在操作边界检查总预算；同步模型请求仍须等待返回才能停止。"""
+    budget = InvestigationBudget(timeout_seconds, clock=clock)
     session = FrozenWindowSession(store, snapshot_id, max_tool_calls)
     strategy = "window_react_v1"
+    try:
+        return _run_window_agent(session, model, max_tool_calls, strategy, budget)
+    except InvestigationDeadlineExceeded:
+        return session.report(strategy, termination="deadline_exceeded",
+                              reason="调查时间预算耗尽，保留已有证据；未接受迟到结论。")
+
+
+def _run_window_agent(session, model, max_tool_calls, strategy, budget):
+    budget.check()
     if session._payload is None:
         return session.report(strategy, termination="source_error", reason="快照无法读取或无效。")
     for _ in range(max_tool_calls):
+        budget.check()
         started, status, error_code = monotonic(), "ok", None
         try:
             raw = model.decide(session.context())
@@ -223,6 +237,7 @@ def investigate_window_agent(store, snapshot_id, model, max_tool_calls=6):
             usage = token_usage(getattr(model, "last_usage", None))
             session.usage.calls.append(CallUsage(kind="model", name="decide", status=status,
                 elapsed_ms=(monotonic() - started) * 1000, error_code=error_code, **usage))
+        budget.check()
         if status == "error":
             return session.report(strategy, termination="model_error", reason="模型调用失败，保留已有证据。")
         try:
@@ -237,11 +252,14 @@ def investigate_window_agent(store, snapshot_id, model, max_tool_calls=6):
                 # 仅保存已通过 Schema 校验的候选，显式与接受的 finding 分离，便于复盘。
                 result.rejected_finding = action.finding.model_copy(deep=True)
                 return result
+            budget.check()
             return session.report(strategy, action.finding)
         if session.remaining <= 0:
             return session.report(strategy, termination="budget_exhausted", reason="工具调用预算耗尽。")
         try:
+            budget.check()
             session.drilldown(action.trace_id)
         except ValueError:
             return session.report(strategy, termination="invalid_action", reason="请求不属于绑定快照。")
+        budget.check()
     raise AssertionError("unreachable")

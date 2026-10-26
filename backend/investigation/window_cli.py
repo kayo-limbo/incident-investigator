@@ -30,7 +30,18 @@ def main():
     investigate.add_argument("--strategy", choices=("fixed", "agent", "hypotheses"), default="fixed")
     investigate.add_argument("--max-tool-calls", type=int, choices=range(1, 101), default=6)
     investigate.add_argument("--output", type=Path)
+    investigate.add_argument("--timeout-seconds", type=float,
+                             help="普通 agent 调查的总时间预算，默认120秒；在操作边界检查，不中断同步请求")
     args = parser.parse_args()
+    if (args.command == "investigate" and args.timeout_seconds is not None
+            and args.strategy != "agent"):
+        parser.error("--timeout-seconds 当前仅支持 agent 策略")
+    if args.command == "investigate" and args.timeout_seconds is not None:
+        from .budget import InvestigationBudget
+        try:
+            InvestigationBudget(args.timeout_seconds)
+        except ValueError as exc:
+            parser.error(str(exc))
     tools = WindowEvidenceTools(SnapshotStore(args.store))
     if args.command == "query":
         evidence = tools.query_window(WindowQuery(start_us=args.start_us, end_us=args.end_us, limit=args.limit))
@@ -45,7 +56,9 @@ def main():
             adapter = HypothesisChatModel if args.strategy == "hypotheses" else WindowChatModel
             runner = investigate_hypotheses if args.strategy == "hypotheses" else investigate_window_agent
             with adapter(config) as model:
-                result = runner(tools.store, args.snapshot_id, model, args.max_tool_calls)
+                options = ({"timeout_seconds": args.timeout_seconds if args.timeout_seconds is not None else 120}
+                           if args.strategy == "agent" else {})
+                result = runner(tools.store, args.snapshot_id, model, args.max_tool_calls, **options)
         else:
             result = investigate_window_fixed(tools.store, args.snapshot_id, args.max_tool_calls)
         output = result.model_dump_json(indent=2)
