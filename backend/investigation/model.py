@@ -129,13 +129,12 @@ class ChatCompletionsModel:
     def close(self):
         self._client.close()
 
-    def decide(self, context: DecisionContext) -> dict:
-        # 每次调用开始即清空，失败时不能复用上一次响应的 token。
-        self.last_usage = token_usage(None)
+    def _payload(self, context) -> dict:
+        """同步与异步传输共享同一请求协议。"""
         snapshot = context.model_dump_json()
         if len(snapshot.encode("utf-8")) > self.MAX_CONTEXT_BYTES:
             raise ModelFailure("context_too_large")
-        payload = {
+        return {
             "model": self.config.model,
             "messages": [
                 {"role": "system", "content": self.system_prompt + "\n动作 Schema：\n"
@@ -147,6 +146,11 @@ class ChatCompletionsModel:
             "thinking": {"type": "disabled"},
             "stream": False,
         }
+
+    def decide(self, context: DecisionContext) -> dict:
+        # 每次调用开始即清空，失败时不能复用上一次响应的 token。
+        self.last_usage = token_usage(None)
+        payload = self._payload(context)
         started = monotonic()
         try:
             with self._client.stream(
@@ -167,18 +171,20 @@ class ChatCompletionsModel:
                     if monotonic() - started > self.config.timeout_seconds:
                         raise ModelFailure("timeout")
                     chunks.append(chunk)
-            body = b"".join(chunks)
-            try:
-                envelope = json.loads(body)
-                self.last_usage = token_usage(envelope.get("usage") if isinstance(envelope, dict) else None)
-            except (ValueError, RecursionError):
-                pass
-            # 即使动作截断或拒答，已返回的供应商用量仍保留。
-            return self._parse(body)
+            return self._decode(b"".join(chunks))
         except httpx.TimeoutException:
             raise ModelFailure("timeout") from None
         except httpx.HTTPError:
             raise ModelFailure("transport_error") from None
+
+    def _decode(self, body):
+        try:
+            envelope = json.loads(body)
+            self.last_usage = token_usage(envelope.get("usage") if isinstance(envelope, dict) else None)
+        except (ValueError, RecursionError):
+            pass
+        # 即使动作截断或拒答，已返回的供应商用量仍保留。
+        return self._parse(body)
 
     @staticmethod
     def _parse(body: bytes) -> dict:

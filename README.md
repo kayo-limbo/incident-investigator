@@ -24,7 +24,9 @@
 
 ## 窗口证据与冻结快照
 
-普通窗口 `agent` 策略新增总时间预算，默认 120 秒，可通过 `window_cli investigate <snapshot_id> --strategy agent --timeout-seconds 60` 调整。预算从读取快照前开始，在模型与工具操作边界检查；超时报告为 `deadline_exceeded`，保留证据和用量并拒绝迟到结论。这是协作式停止，不能中断正在阻塞的同步网络请求，也不保证实际返回时间不超过预算。固定规则、假设策略与旧单 Trace 入口尚未接入；在途取消和累计 token 预算仍待实现。
+普通窗口 `agent` CLI 使用异步模型调用，总时间预算默认 120 秒，可通过 `window_cli investigate <snapshot_id> --strategy agent --timeout-seconds 60` 调整。预算从读取快照前开始，多轮共享一个截止时间；到期取消本地网络等待，报告为 `deadline_exceeded`。调查期间第一次 Ctrl+C 会保留证据和用量，通过 `--output` 保存 `cancelled` 报告并返回退出码 130。未取得的供应商用量记为未知。同步文件读取、解析和清理仍可能使实际返回晚于截止时间，本地取消不证明供应商停止生成或计费。
+
+同步 Python 调查接口与既有评测入口仍保留操作边界预算；固定规则、假设策略与旧单 Trace 入口未接入异步取消，累计 token 预算仍待实现。实现边界、调用顺序与测试见 [异步调查与取消](docs/decisions/010-async-investigation.md)。
 
 2026-10-26：新增时间预算测试，使用可控时钟验证快照读取计时、迟到动作拒绝、已完成证据保留及网络超时区分；未调用真实模型或重跑容器实验。
 

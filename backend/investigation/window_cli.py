@@ -1,17 +1,28 @@
 """python -m backend.investigation.window_cli --help"""
 
 import argparse
+import asyncio
 from pathlib import Path
 
 from .evidence_models import WindowQuery
 from .snapshot_store import SnapshotStore
 from .window_queries import WindowEvidenceTools
 from .model import ModelConfig, ModelConfigError
-from .window_model import WindowChatModel
+from .async_model import AsyncWindowChatModel
+from .async_investigation import InvestigationCancelled, investigate_window_async
 from .window_baseline import investigate_window_fixed
-from .window_investigation import investigate_window_agent
 from .hypothesis_agent import investigate_hypotheses
 from .hypothesis_model import HypothesisChatModel
+
+
+async def run_async_agent(store, snapshot_id, config, max_tool_calls, timeout_seconds):
+    """只在 CLI 边界将取消转成可落盘报告，库函数仍传播取消。"""
+    try:
+        async with AsyncWindowChatModel(config) as model:
+            return await investigate_window_async(store, snapshot_id, model, max_tool_calls,
+                                                   timeout_seconds=timeout_seconds)
+    except InvestigationCancelled as exc:
+        return exc.report
 
 
 def main():
@@ -31,7 +42,7 @@ def main():
     investigate.add_argument("--max-tool-calls", type=int, choices=range(1, 101), default=6)
     investigate.add_argument("--output", type=Path)
     investigate.add_argument("--timeout-seconds", type=float,
-                             help="普通 agent 调查的总时间预算，默认120秒；在操作边界检查，不中断同步请求")
+                             help="普通 agent 调查总时限，默认120秒；到期取消异步模型等待")
     args = parser.parse_args()
     if (args.command == "investigate" and args.timeout_seconds is not None
             and args.strategy != "agent"):
@@ -53,12 +64,13 @@ def main():
                 config = ModelConfig.from_env()
             except ModelConfigError as exc:
                 parser.error(str(exc))
-            adapter = HypothesisChatModel if args.strategy == "hypotheses" else WindowChatModel
-            runner = investigate_hypotheses if args.strategy == "hypotheses" else investigate_window_agent
-            with adapter(config) as model:
-                options = ({"timeout_seconds": args.timeout_seconds if args.timeout_seconds is not None else 120}
-                           if args.strategy == "agent" else {})
-                result = runner(tools.store, args.snapshot_id, model, args.max_tool_calls, **options)
+            if args.strategy == "agent":
+                result = asyncio.run(run_async_agent(
+                    tools.store, args.snapshot_id, config, args.max_tool_calls,
+                    args.timeout_seconds if args.timeout_seconds is not None else 120))
+            else:
+                with HypothesisChatModel(config) as model:
+                    result = investigate_hypotheses(tools.store, args.snapshot_id, model, args.max_tool_calls)
         else:
             result = investigate_window_fixed(tools.store, args.snapshot_id, args.max_tool_calls)
         output = result.model_dump_json(indent=2)
@@ -66,6 +78,8 @@ def main():
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(output + "\n", encoding="utf-8")
         print(output)
+        if result.termination == "cancelled":
+            return 130
         return 0 if result.termination == "completed" else 1
     print(evidence.model_dump_json(indent=2))
     return 0 if evidence.status == "ok" else 1

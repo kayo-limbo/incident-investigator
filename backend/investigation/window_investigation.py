@@ -18,7 +18,7 @@ from .window_queries import summarize
 Code = Literal["no_anomaly_observed", "inventory_latency", "pre_send_delay",
                "pool_contention", "inventory_latency_with_pool_contention", "insufficient_evidence"]
 Termination = Literal["completed", "source_error", "model_error", "invalid_action",
-                      "invalid_finding", "budget_exhausted", "deadline_exceeded"]
+                      "invalid_finding", "budget_exhausted", "deadline_exceeded", "cancelled"]
 LIMITATIONS = ["结论仅适用于冻结窗口中的已采集样本，不保证全量覆盖。",
                "发送前耗时包含建连和调度，不能视为纯连接池等待。",
                "引用校验不证明语义正确或唯一根因；请求配置不等于当前配置。"]
@@ -240,26 +240,33 @@ def _run_window_agent(session, model, max_tool_calls, strategy, budget):
         budget.check()
         if status == "error":
             return session.report(strategy, termination="model_error", reason="模型调用失败，保留已有证据。")
-        try:
-            action = WINDOW_ACTION.validate_python(raw)
-        except ValidationError:
-            return session.report(strategy, termination="invalid_action", reason="模型动作不符合窗口协议。")
-        if isinstance(action, Finish):
-            try:
-                session.validate_finding(action.finding)
-            except ValueError as exc:
-                result = session.report(strategy, termination="invalid_finding", reason=f"结论校验失败：{exc}。")
-                # 仅保存已通过 Schema 校验的候选，显式与接受的 finding 分离，便于复盘。
-                result.rejected_finding = action.finding.model_copy(deep=True)
-                return result
-            budget.check()
-            return session.report(strategy, action.finding)
-        if session.remaining <= 0:
-            return session.report(strategy, termination="budget_exhausted", reason="工具调用预算耗尽。")
-        try:
-            budget.check()
-            session.drilldown(action.trace_id)
-        except ValueError:
-            return session.report(strategy, termination="invalid_action", reason="请求不属于绑定快照。")
-        budget.check()
+        result = apply_window_action(session, raw, strategy, budget)
+        if result is not None:
+            return result
     raise AssertionError("unreachable")
+
+
+def apply_window_action(session, raw, strategy, budget):
+    """共享动作验证与执行；返回报告或 None（继续调查）。"""
+    try:
+        action = WINDOW_ACTION.validate_python(raw)
+    except ValidationError:
+        return session.report(strategy, termination="invalid_action", reason="模型动作不符合窗口协议。")
+    if isinstance(action, Finish):
+        try:
+            session.validate_finding(action.finding)
+        except ValueError as exc:
+            result = session.report(strategy, termination="invalid_finding", reason=f"结论校验失败：{exc}。")
+            # 仅保存已通过 Schema 校验的候选，显式与接受的 finding 分离，便于复盘。
+            result.rejected_finding = action.finding.model_copy(deep=True)
+            return result
+        budget.check()
+        return session.report(strategy, action.finding)
+    if session.remaining <= 0:
+        return session.report(strategy, termination="budget_exhausted", reason="工具调用预算耗尽。")
+    try:
+        budget.check()
+        session.drilldown(action.trace_id)
+    except ValueError:
+        return session.report(strategy, termination="invalid_action", reason="请求不属于绑定快照。")
+    budget.check()

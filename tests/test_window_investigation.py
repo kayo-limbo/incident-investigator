@@ -3,7 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 from contextlib import redirect_stdout
 
 import httpx
@@ -223,9 +223,10 @@ class WindowInvestigationTests(unittest.TestCase):
             with patch("sys.argv", ["window", "--store", str(self.store.directory), "investigate", key,
                                     "--strategy", strategy, "--output", str(output)]), \
                     patch("backend.investigation.window_cli.ModelConfig.from_env"), \
-                    patch("backend.investigation.window_cli.WindowChatModel") as adapter, \
+                    patch("backend.investigation.window_cli.AsyncWindowChatModel") as adapter, \
                     redirect_stdout(io.StringIO()):
-                adapter.return_value.__enter__.return_value = model
+                model.decide = AsyncMock(side_effect=model.decide)
+                adapter.return_value.__aenter__.return_value = model
                 self.assertEqual(cli_main(), 0)
                 self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["snapshot_id"], key)
                 if strategy == "fixed":
