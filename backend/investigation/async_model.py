@@ -1,13 +1,15 @@
-"""普通窗口模型的异步传输；一个实例由一次调查独占。"""
+"""两种窗口模型共享异步传输；一个实例由一次调查独占。"""
 
 import httpx
 
 from .agent import ModelFailure
 from .usage import token_usage
 from .window_model import WindowChatModel
+from .model import ChatCompletionsModel
+from .hypothesis_model import HypothesisChatModel
 
 
-class AsyncWindowChatModel(WindowChatModel):
+class AsyncChatCompletionsModel(ChatCompletionsModel):
     def __init__(self, config, *, transport=None):
         self.config = config
         self.last_usage = token_usage(None)
@@ -55,3 +57,13 @@ class AsyncWindowChatModel(WindowChatModel):
         except httpx.HTTPError:
             raise ModelFailure("transport_error") from None
         # CancelledError 保持传播；async with 负责退出响应流。
+
+
+class AsyncWindowChatModel(AsyncChatCompletionsModel):
+    system_prompt = WindowChatModel.system_prompt
+    action_schema = WindowChatModel.action_schema
+
+
+class AsyncHypothesisChatModel(AsyncChatCompletionsModel):
+    system_prompt = HypothesisChatModel.system_prompt
+    action_schema = HypothesisChatModel.action_schema

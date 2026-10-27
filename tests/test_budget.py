@@ -52,7 +52,7 @@ class BudgetTests(unittest.TestCase):
 
     def test_cli_rejects_invalid_or_unsupported_budget_before_model_setup(self):
         for strategy, value in (("agent", "nan"), ("agent", "0"),
-                                ("fixed", "5"), ("hypotheses", "5")):
+                                ("fixed", "5"), ("hypotheses", "nan"), ("hypotheses", "0")):
             with patch("sys.argv", ["window", "investigate", self.key,
                                     "--strategy", strategy, "--timeout-seconds", value]), \
                     patch("backend.investigation.window_cli.ModelConfig.from_env") as config, \

@@ -8,25 +8,25 @@ from .evidence_models import WindowQuery
 from .snapshot_store import SnapshotStore
 from .window_queries import WindowEvidenceTools
 from .model import ModelConfig, ModelConfigError
-from .async_model import AsyncWindowChatModel
-from .async_investigation import InvestigationCancelled, investigate_window_async
+from .async_model import AsyncWindowChatModel, AsyncHypothesisChatModel
+from .async_investigation import InvestigationCancelled, investigate_window_async, investigate_hypotheses_async
 from .window_baseline import investigate_window_fixed
-from .hypothesis_agent import investigate_hypotheses
-from .hypothesis_model import HypothesisChatModel
 
 
-async def run_async_agent(store, snapshot_id, config, max_tool_calls, timeout_seconds):
+async def run_async_agent(store, snapshot_id, config, max_tool_calls, timeout_seconds, *, strategy="agent"):
     """只在 CLI 边界将取消转成可落盘报告，库函数仍传播取消。"""
+    adapters = {"agent": (AsyncWindowChatModel, investigate_window_async),
+                "hypotheses": (AsyncHypothesisChatModel, investigate_hypotheses_async)}
+    adapter, runner = adapters[strategy]
     try:
-        async with AsyncWindowChatModel(config) as model:
-            return await investigate_window_async(store, snapshot_id, model, max_tool_calls,
-                                                   timeout_seconds=timeout_seconds)
+        async with adapter(config) as model:
+            return await runner(store, snapshot_id, model, max_tool_calls, timeout_seconds=timeout_seconds)
     except InvestigationCancelled as exc:
         return exc.report
 
 
 def main():
-    parser = argparse.ArgumentParser(description="查询、下钻或调查冻结窗口；agent 策略会调用模型")
+    parser = argparse.ArgumentParser(description="查询、下钻或调查冻结窗口；agent/hypotheses 策略会调用模型")
     parser.add_argument("--store", type=Path, default=Path(".snapshots"))
     commands = parser.add_subparsers(dest="command", required=True)
     query = commands.add_parser("query")
@@ -42,11 +42,11 @@ def main():
     investigate.add_argument("--max-tool-calls", type=int, choices=range(1, 101), default=6)
     investigate.add_argument("--output", type=Path)
     investigate.add_argument("--timeout-seconds", type=float,
-                             help="普通 agent 调查总时限，默认120秒；到期取消异步模型等待")
+                             help="agent/hypotheses 调查总时限，默认120秒；到期取消异步模型等待")
     args = parser.parse_args()
     if (args.command == "investigate" and args.timeout_seconds is not None
-            and args.strategy != "agent"):
-        parser.error("--timeout-seconds 当前仅支持 agent 策略")
+            and args.strategy == "fixed"):
+        parser.error("--timeout-seconds 仅支持 agent/hypotheses 策略")
     if args.command == "investigate" and args.timeout_seconds is not None:
         from .budget import InvestigationBudget
         try:
@@ -64,13 +64,10 @@ def main():
                 config = ModelConfig.from_env()
             except ModelConfigError as exc:
                 parser.error(str(exc))
-            if args.strategy == "agent":
-                result = asyncio.run(run_async_agent(
-                    tools.store, args.snapshot_id, config, args.max_tool_calls,
-                    args.timeout_seconds if args.timeout_seconds is not None else 120))
-            else:
-                with HypothesisChatModel(config) as model:
-                    result = investigate_hypotheses(tools.store, args.snapshot_id, model, args.max_tool_calls)
+            result = asyncio.run(run_async_agent(
+                tools.store, args.snapshot_id, config, args.max_tool_calls,
+                args.timeout_seconds if args.timeout_seconds is not None else 120,
+                strategy=args.strategy))
         else:
             result = investigate_window_fixed(tools.store, args.snapshot_id, args.max_tool_calls)
         output = result.model_dump_json(indent=2)

@@ -12,7 +12,7 @@ from backend.investigation.agent import ModelFailure
 from backend.investigation.evidence_models import WindowQuery
 from backend.investigation.hypotheses import HypothesisLedger, HypothesisUpdate
 from backend.investigation.hypothesis_agent import investigate_hypotheses
-from backend.investigation.hypothesis_model import HypothesisChatModel
+from backend.investigation.async_model import AsyncHypothesisChatModel
 from backend.investigation.model import ModelConfig
 from backend.investigation.snapshot_store import SnapshotStore
 from backend.investigation.window_cli import main
@@ -222,8 +222,8 @@ class HypothesisTests(unittest.TestCase):
             return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(next(actions))}}],
                 "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30}})
         output = self.store.directory / "report.private.json"
-        with HypothesisChatModel(config, transport=httpx.MockTransport(handler)) as adapter, \
-                patch("backend.investigation.window_cli.HypothesisChatModel", return_value=adapter), \
+        adapter = AsyncHypothesisChatModel(config, transport=httpx.MockTransport(handler))
+        with patch("backend.investigation.window_cli.AsyncHypothesisChatModel", return_value=adapter), \
                 patch("backend.investigation.window_cli.ModelConfig.from_env", return_value=config), \
                 patch("sys.argv", ["window", "--store", str(self.store.directory), "investigate", self.key,
                                    "--strategy", "hypotheses", "--output", str(output)]), redirect_stdout(io.StringIO()):
