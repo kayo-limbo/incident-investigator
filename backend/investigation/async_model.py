@@ -64,6 +64,6 @@ class AsyncWindowChatModel(AsyncChatCompletionsModel):
     action_schema = WindowChatModel.action_schema
 
 
-class AsyncHypothesisChatModel(AsyncChatCompletionsModel):
+class AsyncHypothesisChatModel(AsyncWindowChatModel):
     system_prompt = HypothesisChatModel.system_prompt
     action_schema = HypothesisChatModel.action_schema

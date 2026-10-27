@@ -17,6 +17,10 @@ def token_usage(raw) -> dict[str, int | None]:
             result["total_tokens"] != result["prompt_tokens"] + result["completion_tokens"]
         ):
             return {name: None for name in names}
+        total = result["total_tokens"]
+        if total is not None and any(result[name] is not None and result[name] > total
+                                     for name in ("prompt_tokens", "completion_tokens")):
+            return {name: None for name in names}
     return result
 
 

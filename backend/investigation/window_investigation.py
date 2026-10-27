@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from .evidence_models import ObservationRef, WindowQuery
 from .agent import ModelFailure
-from .budget import InvestigationBudget, InvestigationDeadlineExceeded
+from .budget import InvestigationBudget, InvestigationDeadlineExceeded, TokenBudgetStatus
 from .models import Evidence, TraceQuery
 from .snapshot_store import SnapshotStore
 from .usage import CallUsage, Usage, token_usage
@@ -18,7 +18,8 @@ from .window_queries import summarize
 Code = Literal["no_anomaly_observed", "inventory_latency", "pre_send_delay",
                "pool_contention", "inventory_latency_with_pool_contention", "insufficient_evidence"]
 Termination = Literal["completed", "source_error", "model_error", "invalid_action",
-                      "invalid_finding", "budget_exhausted", "deadline_exceeded", "cancelled"]
+                      "invalid_finding", "budget_exhausted", "deadline_exceeded", "cancelled",
+                      "token_budget_exhausted", "usage_unavailable"]
 LIMITATIONS = ["结论仅适用于冻结窗口中的已采集样本，不保证全量覆盖。",
                "发送前耗时包含建连和调度，不能视为纯连接池等待。",
                "引用校验不证明语义正确或唯一根因；请求配置不等于当前配置。"]
@@ -68,6 +69,7 @@ class WindowReport(BaseModel):
     usage: Usage
     usage_totals: dict
     rejected_finding: WindowFinding | None = None
+    token_budget: TokenBudgetStatus | None = None
 
 
 def trace_index(payload):

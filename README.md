@@ -18,7 +18,8 @@
 - [x] 冻结窗口接入规则与 Agent：绑定输入、字段引用校验、调用/token 用量及四场景对照入口。
 - [x] 显式假设策略：版本历史、支持/反证字段、查询目的与结论关联；提供同快照三策略回放。
 - [x] 普通与假设窗口 CLI 的异步调用、总时间预算与取消报告。
-- [ ] 重复查询控制与累计 token 预算。
+- [x] 两种异步窗口策略的可选累计 token 停止阈值与未知用量处理。
+- [ ] 重复查询控制。
 - [ ] 服务化工作台、审批处置、批量评测。
 
 目前已完成最小故障实验环境、规则基线和最小模型调查闭环；五场景验收不代表完整评测体系或泛化能力。
@@ -27,7 +28,9 @@
 
 窗口 `agent` 和 `hypotheses` CLI 均使用异步模型调用，总时间预算默认 120 秒，可通过 `window_cli investigate <snapshot_id> --strategy hypotheses --timeout-seconds 60` 调整。预算从读取快照前开始，多轮共享一个截止时间；到期取消本地网络等待，报告为 `deadline_exceeded`。调查期间第一次 Ctrl+C 会保留证据和用量，通过 `--output` 保存 `cancelled` 报告并返回退出码 130。假设策略还保留已提交的假设版本与查询记录，不接纳迟到更新。未取得的供应商用量记为未知。同步文件读取、解析和清理仍可能使实际返回晚于截止时间，本地取消不证明供应商停止生成或计费。
 
-既有同步 Python 接口和评测入口继续保留：普通窗口同步接口仅在操作边界检查时间，假设同步接口没有总时间预算；固定规则与旧单 Trace 入口未接入异步取消，累计 token 预算仍待实现。实现与测试见 [异步调查与取消](docs/decisions/010-async-investigation.md) 和 [假设策略的异步状态边界](docs/decisions/011-async-hypotheses.md)。
+既有同步 Python 接口和评测入口继续保留：普通窗口同步接口仅在操作边界检查时间，假设同步接口没有总时间预算；固定规则与旧单 Trace 入口未接入异步取消。实现与测试见 [异步调查与取消](docs/decisions/010-async-investigation.md) 和 [假设策略的异步状态边界](docs/decisions/011-async-hypotheses.md)。
+
+两种异步窗口策略可使用 `--max-total-tokens 20000` 设置累计停止阈值，默认不启用。统计供应商返回的各轮输入与输出总量；达到阈值后拒绝当前动作并停止，缺少完整总量时返回 `usage_unavailable`。报告 `token_budget` 区分已知小计、完整总量、剩余额度与超额数。该阈值在响应后检查，最后一次请求可能超额，不是费用硬上限；详见 [累计token预算](docs/decisions/012-observed-token-budget.md)。
 
 2026-10-26：新增时间预算测试，使用可控时钟验证快照读取计时、迟到动作拒绝、已完成证据保留及网络超时区分；未调用真实模型或重跑容器实验。
 
@@ -37,7 +40,7 @@
 
 新增窗口规则与 Agent 入口，共享快照、摘要、请求索引和默认六次工具调用上限；确定性结论要求引用已下钻的具体字段。窗口报告记录模型/工具调用、token、耗时与终止原因，缺失 token 记为未知。原单 Trace 入口继续保留。设计见 [窗口调查协议](docs/decisions/007-window-investigation.md)，真实结果与失败复盘见 [四场景对照](docs/experiments/window-comparison.md)。
 
-新增 `hypotheses` 策略，在同一快照上维护假设版本、支持与反证、待检查项及查询目的，最终结论关联具体假设版本和观测字段。非法更新整批拒绝，保留已有状态。结构校验不证明语义或因果正确；CLI 已支持总时限与取消，累计 token 预算和进程恢复尚未实现。设计与命令见 [显式假设协议](docs/decisions/008-hypothesis-investigation.md)，真实失败与结果见 [假设策略对照](docs/experiments/hypothesis-comparison.md)。
+新增 `hypotheses` 策略，在同一快照上维护假设版本、支持与反证、待检查项及查询目的，最终结论关联具体假设版本和观测字段。非法更新整批拒绝，保留已有状态。结构校验不证明语义或因果正确；CLI 已支持总时限、取消与可选累计token停止阈值，进程恢复尚未实现。设计与命令见 [显式假设协议](docs/decisions/008-hypothesis-investigation.md)，真实失败与结果见 [假设策略对照](docs/experiments/hypothesis-comparison.md)。
 
 ```powershell
 # snapshot_id 来自 window_cli query 输出；默认 fixed 无需模型
