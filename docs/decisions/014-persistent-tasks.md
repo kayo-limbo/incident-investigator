@@ -44,8 +44,12 @@ $env:TASK_TEST_DATABASE_URL = $env:TASK_DATABASE_URL
 
 集成测试为每个案例创建独立随机 schema，结束时只删除该 schema。覆盖并发幂等提交、互斥领取、锁跳过、领取事务释放、错误令牌/快照/终态写入拒绝、队列取消、结果重读和取消报告保存。没有数据库环境变量或驱动时明确跳过，跳过不算通过。单元测试覆盖参数边界、策略预算透传、适配器清理、空队列、取消传播以及持久化失败不重跑模型。
 
+2026-10-28 首轮验证因 Docker Desktop 运行时 socket 不可访问，9 项数据库集成用例未运行。引擎恢复后补齐验收，并新增 CLI 全流程和失败报告落库用例：11 项真实 PostgreSQL 集成测试、6 项任务单元测试全部通过，无跳过。CLI 测试只替换隔离 schema 的存储工厂，数据库和 fixed 执行器均真实运行；超时与取消报告保存使用构造报告，不代表本次通过真实模型触发了超时或取消。
+
+并发用例分别启动 6 个提交线程、8 个领取线程，验证同键只有一个任务、8 个任务各被领取一次；另持有一行锁验证另一连接能领取后续任务，使用 NOWAIT 验证调查执行时领取事务已释放。这是功能与一致性验收，不是吞吐量测试。
+
+同次全量回归：设置数据库测试 URL 后运行 `python -m unittest discover -s tests -q`，163 项全部通过，无跳过；未调用真实模型或重跑故障注入实验。
+
 ## 来源与版本
 
-2026-10-28 本地验证：参数与 Worker 单元测试 6 项通过；9 项数据库集成用例未运行。Docker Desktop 启动时运行时 socket 不可访问，数据库不可用。上述 SQL 并发语义是实现设计，尚不能标记为本机集成验收通过。
-
-自行实现任务表、状态流转和 Worker，没有复制第三方源码。数据库镜像固定 `postgres:17.6`，Python 驱动固定 `psycopg[binary]==3.3.3`。使用 PostgreSQL 原生行锁和唯一约束；参考 [PostgreSQL 17 SELECT / SKIP LOCKED](https://www.postgresql.org/docs/17/sql-select.html) 与 [Psycopg 3 安装说明](https://www.psycopg.org/psycopg3/docs/basic/install.html)。SKIP LOCKED 适用于队列争抢，不适合需要完整一致视图的一般查询。
+自行实现任务表、状态流转和 Worker，没有复制第三方源码。原计划 `postgres:17.6` 首次拉取缓慢，改用本机已有 PostgreSQL 17.11 Alpine 镜像并固定摘要 `postgres@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73`；通过 `postgres --version` 和运行容器内 `SHOW server_version` 核对为 17.11。未验证原计划的 17.6。Python 驱动固定 `psycopg[binary]==3.3.3`。使用 PostgreSQL 原生行锁和唯一约束；参考 [PostgreSQL 17 SELECT / SKIP LOCKED](https://www.postgresql.org/docs/17/sql-select.html) 与 [Psycopg 3 安装说明](https://www.psycopg.org/psycopg3/docs/basic/install.html)。SKIP LOCKED 适用于队列争抢，不适合需要完整一致视图的一般查询。

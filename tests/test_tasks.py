@@ -1,9 +1,12 @@
 import asyncio
 import importlib.util
+import io
+import json
 import os
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import redirect_stdout
 from threading import Barrier
 from unittest.mock import patch
 from uuid import uuid4
@@ -196,3 +199,41 @@ class TaskDatabaseTests(unittest.TestCase):
             return await execute(request, snapshots)
         with patch("backend.tasks.worker.execute", side_effect=inspect):
             self.assertEqual(asyncio.run(run_once(self.store, self.snapshots, "worker")).state, "completed")
+
+    def test_cli_submit_execute_query_and_cancel(self):
+        from backend.tasks.__main__ import main
+
+        def invoke(*args):
+            output = io.StringIO()
+            # 只替换 schema 选择，仍使用真实 PostgreSQL 和真实固定调查执行器。
+            with patch.dict(os.environ, {"TASK_DATABASE_URL": DSN}), \
+                    patch("backend.tasks.__main__.TaskStore", return_value=self.store), \
+                    redirect_stdout(output):
+                code = main(["--snapshots", str(self.snapshots.directory), *args])
+            return code, json.loads(output.getvalue())
+
+        self.assertEqual(invoke("init"), (0, {"initialized": True}))
+        code, task = invoke("submit", self.key, "--idempotency-key", "cli-job")
+        self.assertEqual(code, 0)
+        self.assertEqual(task["state"], "queued")
+        self.assertEqual(invoke("submit", self.key, "--idempotency-key", "cli-job")[1]["id"], task["id"])
+        self.assertEqual(invoke("submit", self.key, "--idempotency-key", "cli-job", "--max-tool-calls", "1"),
+                         (1, {"error": "idempotency_key_conflict"}))
+        code, completed = invoke("work-once", "--worker-id", "cli-worker")
+        self.assertEqual(code, 0)
+        self.assertEqual(completed["state"], "completed")
+        self.assertEqual(invoke("get", task["id"]), (0, completed))
+        self.assertEqual(invoke("work-once", "--worker-id", "cli-worker"), (0, {"idle": True}))
+        _, queued = invoke("submit", self.key, "--idempotency-key", "cli-cancel")
+        self.assertEqual(invoke("cancel", queued["id"])[1]["state"], "cancelled")
+        self.assertEqual(invoke("cancel", task["id"]), (1, {"error": "task_not_queued"}))
+
+    def test_noncompleted_report_is_saved_as_failed(self):
+        from backend.tasks.worker import run_once
+        self.store.submit(self.request, "budget-failure")
+        report = self.report().model_copy(update={"termination": "deadline_exceeded"})
+        with patch("backend.tasks.worker.execute", return_value=report):
+            saved = asyncio.run(run_once(self.store, self.snapshots, "worker"))
+        self.assertEqual(saved.state, "failed")
+        self.assertEqual(saved.error_code, "deadline_exceeded")
+        self.assertEqual(self.store.get(saved.id).result, report.model_dump(mode="json"))

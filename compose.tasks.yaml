@@ -1,7 +1,8 @@
 name: incident-investigator-tasks
 services:
   postgres:
-    image: postgres:17.6
+    # PostgreSQL 17.11 (Alpine); immutable digest verified by postgres --version.
+    image: postgres@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
     environment:
       POSTGRES_DB: investigations
       POSTGRES_USER: investigator
