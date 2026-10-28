@@ -19,7 +19,7 @@ Code = Literal["no_anomaly_observed", "inventory_latency", "pre_send_delay",
                "pool_contention", "inventory_latency_with_pool_contention", "insufficient_evidence"]
 Termination = Literal["completed", "source_error", "model_error", "invalid_action",
                       "invalid_finding", "budget_exhausted", "deadline_exceeded", "cancelled",
-                      "token_budget_exhausted", "usage_unavailable"]
+                      "token_budget_exhausted", "usage_unavailable", "repeated_query"]
 LIMITATIONS = ["结论仅适用于冻结窗口中的已采集样本，不保证全量覆盖。",
                "发送前耗时包含建连和调度，不能视为纯连接池等待。",
                "引用校验不证明语义正确或唯一根因；请求配置不等于当前配置。"]
@@ -58,6 +58,20 @@ class WindowContext(BaseModel):
     snapshot_id: str
     evidence: list[Evidence]
     remaining_tool_calls: int
+    repeat_query_policy: Literal["allow", "stop"] = "allow"
+
+
+class RepeatedQuery(BaseModel):
+    snapshot_id: str
+    trace_id: str
+    previous_evidence_id: str
+    model_call: int
+
+
+class RepeatedQueryDetected(Exception):
+    def __init__(self, detail):
+        super().__init__("repeated_snapshot_query")
+        self.detail = detail
 
 
 class WindowReport(BaseModel):
@@ -70,6 +84,8 @@ class WindowReport(BaseModel):
     usage_totals: dict
     rejected_finding: WindowFinding | None = None
     token_budget: TokenBudgetStatus | None = None
+    repeat_query_policy: Literal["allow", "stop"] = "allow"
+    repeated_query: RepeatedQuery | None = None
 
 
 def trace_index(payload):
@@ -108,9 +124,13 @@ def trace_index(payload):
 class FrozenWindowSession:
     """每次调查独占会话。对外只返回深拷贝；没有实时查询或更换快照接口。"""
 
-    def __init__(self, store: SnapshotStore, snapshot_id: str, max_tool_calls: int = 6):
+    def __init__(self, store: SnapshotStore, snapshot_id: str, max_tool_calls: int = 6, *,
+                 repeat_query_policy="allow"):
         if type(max_tool_calls) is not int or not 1 <= max_tool_calls <= 100:
             raise ValueError("max_tool_calls 必须为 1 到 100 的整数，包含摘要读取")
+        if repeat_query_policy not in ("allow", "stop"):
+            raise ValueError("repeat_query_policy 必须为 allow 或 stop")
+        self.repeat_query_policy = repeat_query_policy
         self.snapshot_id, self.max_tool_calls = snapshot_id, max_tool_calls
         self.usage, self.evidence = Usage(), []
         self.started = monotonic()
@@ -157,13 +177,25 @@ class FrozenWindowSession:
 
     def context(self):
         return WindowContext(snapshot_id=self.snapshot_id, evidence=self.evidence,
-                             remaining_tool_calls=self.remaining).model_copy(deep=True)
+                             remaining_tool_calls=self.remaining,
+                             repeat_query_policy=self.repeat_query_policy).model_copy(deep=True)
+
+    def check_repeated_query(self, trace_id):
+        """只识别本会话已成功下钻的冻结数据；不是实时查询缓存。"""
+        if self.repeat_query_policy == "stop":
+            for evidence in self.evidence:
+                if (evidence.tool == "get_snapshot_trace" and evidence.status == "ok"
+                        and evidence.data.get("trace_id") == trace_id):
+                    raise RepeatedQueryDetected(RepeatedQuery(
+                        snapshot_id=self.snapshot_id, trace_id=trace_id, previous_evidence_id=evidence.id,
+                        model_call=sum(call.kind == "model" for call in self.usage.calls)))
 
     def drilldown(self, trace_id):
         if self.remaining <= 0:
             raise ValueError("budget_exhausted")
         if self._payload is None or trace_id not in self._payload["traces"]:
             raise ValueError("trace_outside_snapshot")
+        self.check_repeated_query(trace_id)
         started = monotonic()
         evidence = Evidence(tool="get_snapshot_trace", source="frozen-window",
                             parameters={"snapshot_id": self.snapshot_id, "trace_id": trace_id},
@@ -206,7 +238,8 @@ class FrozenWindowSession:
         self.usage.elapsed_ms = (monotonic() - self.started) * 1000
         return WindowReport(snapshot_id=self.snapshot_id, strategy=strategy, finding=finding,
                             evidence=self.evidence, termination=termination,
-                            usage=self.usage, usage_totals=self.usage.totals()).model_copy(deep=True)
+                            usage=self.usage, usage_totals=self.usage.totals(),
+                            repeat_query_policy=self.repeat_query_policy).model_copy(deep=True)
 
 
 def investigate_window_agent(store, snapshot_id, model, max_tool_calls=6, *,

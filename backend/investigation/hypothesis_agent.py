@@ -112,6 +112,9 @@ class HypothesisInvestigationState:
             return result
         if budget is not None:
             budget.check()
+        if isinstance(action, HypothesisQuery):
+            # 整个重复查询动作（包括随附的假设更新）都不提交。
+            session.check_repeated_query(action.trace_id)
         self.ledger = candidate
         if isinstance(action, HypothesisFinish):
             return self.report(action.finding, versions=versions)

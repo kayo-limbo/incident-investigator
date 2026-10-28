@@ -6,7 +6,7 @@ from time import monotonic
 from .agent import ModelFailure
 from .budget import InvestigationBudget, InvestigationDeadlineExceeded, ObservedTokenBudget
 from .usage import CallUsage, token_usage
-from .window_investigation import FrozenWindowSession, apply_window_action
+from .window_investigation import FrozenWindowSession, RepeatedQueryDetected, apply_window_action
 from .hypothesis_agent import HypothesisInvestigationState
 
 
@@ -17,18 +17,18 @@ class InvestigationCancelled(asyncio.CancelledError):
 
 
 async def investigate_window_async(store, snapshot_id, model, max_tool_calls=6, *,
-                                   timeout_seconds=120, max_total_tokens=None):
+                                   timeout_seconds=120, max_total_tokens=None, repeat_query_policy="stop"):
     budget = InvestigationBudget(timeout_seconds)
     tokens = ObservedTokenBudget(max_total_tokens)
-    session = FrozenWindowSession(store, snapshot_id, max_tool_calls)
+    session = FrozenWindowSession(store, snapshot_id, max_tool_calls, repeat_query_policy=repeat_query_policy)
     return await _run_async(WindowInvestigationState(session), model, budget, tokens)
 
 
 async def investigate_hypotheses_async(store, snapshot_id, model, max_tool_calls=6, *,
-                                      timeout_seconds=120, max_total_tokens=None):
+                                      timeout_seconds=120, max_total_tokens=None, repeat_query_policy="stop"):
     budget = InvestigationBudget(timeout_seconds)
     tokens = ObservedTokenBudget(max_total_tokens)
-    session = FrozenWindowSession(store, snapshot_id, max_tool_calls)
+    session = FrozenWindowSession(store, snapshot_id, max_tool_calls, repeat_query_policy=repeat_query_policy)
     state = HypothesisInvestigationState(session, "window_hypotheses_async_v1")
     return await _run_async(state, model, budget, tokens)
 
@@ -106,6 +106,10 @@ async def _run_async(state, model, budget, tokens):
                 if result is not None:
                     return annotate(result)
             raise AssertionError("unreachable")
+    except RepeatedQueryDetected as exc:
+        stopped = report(termination="repeated_query", reason="重复读取同一冻结Trace不会增加证据，停止调查。")
+        stopped.repeated_query = exc.detail.model_copy(deep=True)
+        return stopped
     except (TimeoutError, InvestigationDeadlineExceeded):
         return report(termination="deadline_exceeded",
                               reason="调查总时限耗尽，已停止本地等待并保留证据。")

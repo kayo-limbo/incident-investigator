@@ -13,6 +13,7 @@ import httpx
 from backend.investigation.agent import ModelFailure
 from backend.investigation.async_investigation import InvestigationCancelled, investigate_window_async
 from backend.investigation.async_model import AsyncWindowChatModel
+from backend.investigation.budget import InvestigationBudget
 from backend.investigation.evidence_models import WindowQuery
 from backend.investigation.model import ModelConfig
 from backend.investigation.snapshot_store import SnapshotStore
@@ -102,14 +103,21 @@ class AsyncInvestigationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.usage.calls[-1].error_code, "timeout")
 
     async def test_total_budget_is_shared_across_rounds(self):
+        now = [0]
+        budget = InvestigationBudget(10, clock=lambda: now[0])
         class SlowRounds:
             calls = 0
             async def decide(inner, context):
                 inner.calls += 1
-                await asyncio.sleep(0.08)
+                now[0] += 6
+                await asyncio.sleep(0)
                 return self.tool
         model = SlowRounds()
-        result = await investigate_window_async(self.store, self.key, model, timeout_seconds=0.13)
+        with patch("backend.investigation.async_investigation.InvestigationBudget", return_value=budget) as factory, \
+                patch("backend.investigation.async_investigation.asyncio.timeout", wraps=asyncio.timeout) as timeout:
+            result = await investigate_window_async(self.store, self.key, model, timeout_seconds=10)
+            factory.assert_called_once_with(10)
+            timeout.assert_called_once_with(10)
         self.assertEqual(result.termination, "deadline_exceeded")
         self.assertEqual(model.calls, 2)
         self.assertEqual(result.usage_totals["drilldown_calls"], 1)
