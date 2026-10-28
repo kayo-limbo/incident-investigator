@@ -1,0 +1,20 @@
+name: incident-investigator-tasks
+services:
+  postgres:
+    image: postgres:17.6
+    environment:
+      POSTGRES_DB: investigations
+      POSTGRES_USER: investigator
+      # Local development only; bound to the loopback interface.
+      POSTGRES_PASSWORD: local-task-dev
+    ports:
+      - "127.0.0.1:${TASK_DB_PORT:-55432}:5432"
+    volumes:
+      - task-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U investigator -d investigations"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  task-data:

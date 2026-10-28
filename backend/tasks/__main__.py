@@ -1,0 +1,79 @@
+"""python -m backend.tasks --help"""
+
+import argparse
+import asyncio
+import json
+import os
+from pathlib import Path
+from uuid import UUID
+
+import psycopg
+from pydantic import ValidationError
+
+from backend.investigation.snapshot_store import SnapshotStore
+from .models import TaskRequest
+from .store import TaskStore, TaskConflict, TaskNotFound
+from .worker import run_once, WorkerCancelled
+
+
+async def run_cli(store, snapshots, worker_id):
+    try:
+        return await run_once(store, snapshots, worker_id)
+    except WorkerCancelled as exc:
+        return exc.task
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="持久化调查任务；模型策略会发送冻结证据到模型服务")
+    parser.add_argument("--snapshots", type=Path, default=Path(".snapshots"))
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("init")
+    submit = commands.add_parser("submit")
+    submit.add_argument("snapshot_id")
+    submit.add_argument("--idempotency-key", required=True)
+    submit.add_argument("--strategy", choices=("fixed", "agent", "hypotheses"), default="fixed")
+    submit.add_argument("--max-tool-calls", type=int, default=6)
+    submit.add_argument("--timeout-seconds", type=float, default=120)
+    submit.add_argument("--max-total-tokens", type=int)
+    submit.add_argument("--repeat-query-policy", choices=("stop", "allow"), default="stop")
+    for command in ("get", "cancel"):
+        commands.add_parser(command).add_argument("task_id", type=UUID)
+    commands.add_parser("work-once").add_argument("--worker-id", required=True)
+    args = parser.parse_args(argv)
+    dsn = os.environ.get("TASK_DATABASE_URL")
+    if not dsn:
+        print(json.dumps({"error": "task_database_url_missing"}))
+        return 2
+    store = TaskStore(dsn)
+    try:
+        if args.command == "init":
+            store.initialize()
+            print('{"initialized": true}')
+            return 0
+        if args.command == "submit":
+            request = TaskRequest(**{name: getattr(args, name) for name in TaskRequest.model_fields})
+            SnapshotStore(args.snapshots).read(request.snapshot_id)
+            task = store.submit(request, args.idempotency_key)
+        elif args.command == "get":
+            task = store.get(args.task_id)
+        elif args.command == "cancel":
+            task = store.cancel_queued(args.task_id)
+        else:
+            task = asyncio.run(run_cli(store, SnapshotStore(args.snapshots), args.worker_id))
+        print(task.model_dump_json(indent=2) if task else '{"idle": true}')
+        if args.command == "work-once" and task:
+            return 130 if task.state == "cancelled" else (1 if task.state == "failed" else 0)
+        return 0
+    except (TaskConflict, TaskNotFound) as exc:
+        print(json.dumps({"error": str(exc)}))
+        return 1
+    except psycopg.Error:
+        print('{"error": "database_error"}')
+        return 1
+    except (ValidationError, ValueError, OSError):
+        print('{"error": "invalid_request_or_snapshot"}')
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

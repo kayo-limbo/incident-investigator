@@ -24,6 +24,12 @@
 
 目前已完成最小故障实验环境、规则基线和最小模型调查闭环；五场景验收不代表完整评测体系或泛化能力。
 
+## 持久化调查任务
+
+新增 PostgreSQL 任务表与 CLI：幂等提交、短事务领取、一次性 Worker、结果查询和队列取消；复用 fixed、agent、hypotheses 三种策略。实现与运行命令见 [持久化任务设计](docs/decisions/014-persistent-tasks.md)。尚无 Web API、租约或崩溃自动恢复，领取后进程退出会保留 running。
+
+当前任务参数与 Worker 单元测试通过；本机 Docker 启动失败，9 项 PostgreSQL 集成测试尚未执行，数据库并发与落库路径仍待验收。故障实验服务本身没有接入数据库。
+
 ## 窗口证据与冻结快照
 
 窗口 `agent` 和 `hypotheses` CLI 均使用异步模型调用，总时间预算默认 120 秒，可通过 `window_cli investigate <snapshot_id> --strategy hypotheses --timeout-seconds 60` 调整。预算从读取快照前开始，多轮共享一个截止时间；到期取消本地网络等待，报告为 `deadline_exceeded`。调查期间第一次 Ctrl+C 会保留证据和用量，通过 `--output` 保存 `cancelled` 报告并返回退出码 130。假设策略还保留已提交的假设版本与查询记录，不接纳迟到更新。未取得的供应商用量记为未知。同步文件读取、解析和清理仍可能使实际返回晚于截止时间，本地取消不证明供应商停止生成或计费。

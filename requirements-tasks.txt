@@ -1,0 +1,2 @@
+# Task worker only; keep database dependencies out of the fault-lab images.
+psycopg[binary]==3.3.3
