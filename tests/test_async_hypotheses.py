@@ -82,9 +82,21 @@ class AsyncHypothesisTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_deadline_preserves_state_and_unknown_usage(self):
         model = AsyncScripted(query([update()]), "wait")
-        result = await asyncio.wait_for(investigate_hypotheses_async(
-            self.store, self.key, model, timeout_seconds=0.05), 2)
+        # 第二轮确实进入等待后触发真实Timeout，避免要求首轮必须在50ms内完成。
+        timeout = asyncio.timeout(None)
+        budget = InvestigationBudget(120, clock=lambda: 0)
+        with patch("backend.investigation.async_investigation.asyncio.timeout", return_value=timeout), \
+                patch("backend.investigation.async_investigation.InvestigationBudget", return_value=budget):
+            task = asyncio.create_task(investigate_hypotheses_async(self.store, self.key, model))
+            try:
+                await asyncio.wait_for(model.entered.wait(), 2)
+                timeout.reschedule(asyncio.get_running_loop().time())
+                result = await asyncio.wait_for(task, 2)
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
         self.assertEqual(result.termination, "deadline_exceeded")
+        self.assertTrue(model.cleaned)
         self.assertEqual(result.hypotheses[0].version, 1)
         self.assertEqual(result.usage_totals["model_calls"], 2)
         self.assertIsNone(result.usage_totals["total_tokens"])

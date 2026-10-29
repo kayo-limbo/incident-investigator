@@ -21,15 +21,20 @@
 - [x] 两种异步窗口策略的可选累计 token 停止阈值与未知用量处理。
 - [x] 冻结快照重复查询停止规则及允许重复的对照选项。
 - [x] PostgreSQL 持久化任务、幂等提交、互斥领取与一次性 Worker，真实数据库集成验收通过。
+- [x] 任务 HTTP API：幂等提交、状态/结果查询、排队取消，复用独立租约 Worker。
 - [ ] 服务化工作台、审批处置、批量评测。
 
 目前已完成最小故障实验环境、规则基线和最小模型调查闭环；五场景验收不代表完整评测体系或泛化能力。
 
 ## 持久化调查任务
 
-新增 PostgreSQL 任务表与 CLI：幂等提交、短事务领取、一次性 Worker、结果查询和队列取消；复用 fixed、agent、hypotheses 三种策略。实现与运行命令见 [持久化任务设计](docs/decisions/014-persistent-tasks.md)。新增30秒默认租约与心跳，后续Worker可回收过期任务，最多三次尝试；旧令牌不能覆盖新结果。升级前停旧Worker并执行init，详见 [租约与恢复](docs/decisions/015-task-leases.md)。尚无Web API或常驻调度器，恢复会重新调查，可能重复模型调用。
+新增 PostgreSQL 任务表与 CLI：幂等提交、短事务领取、一次性 Worker、结果查询和队列取消；复用 fixed、agent、hypotheses 三种策略。实现与运行命令见 [持久化任务设计](docs/decisions/014-persistent-tasks.md)。新增30秒默认租约与心跳，后续Worker可回收过期任务，最多三次尝试；旧令牌不能覆盖新结果。升级前停旧Worker并执行init，详见 [租约与恢复](docs/decisions/015-task-leases.md)。已有本地任务HTTP API，尚无常驻调度器，恢复会重新调查，可能重复模型调用。
 
-2026-10-28 已在 PostgreSQL 17.11 上通过 11 项数据库集成测试及 6 项任务单元测试，覆盖并发提交、互斥领取、锁跳过、事务释放、结果落库及 CLI 流程。此前因 Docker 启动失败留下的验证缺口已补齐；这不代表具备崩溃恢复能力，也不替代真实模型诊断评测。
+2026-10-28 已在 PostgreSQL 17.11 上通过 11 项数据库集成测试及 6 项任务单元测试，覆盖并发提交、互斥领取、锁跳过、事务释放、结果落库及 CLI 流程。此前因 Docker 启动失败留下的验证缺口已补齐；后续租约阶段补充了进程退出与接管验证，范围见上述租约文档，不替代真实模型诊断评测。
+
+HTTP入口使用 `python -m uvicorn backend.tasks.api:create_app --factory --host 127.0.0.1 --port 8010`，启动前设置 `TASK_DATABASE_URL`，API与Worker共享快照目录。提供 `POST /tasks`（必填 `Idempotency-Key`）、`GET /tasks/{id}` 和 `POST /tasks/{id}/cancel`。HTTP只提交持久化任务，仍由独立Worker执行；同键同参数重放返回同一任务，不重复调查。当前仅适用于本地开发，尚无认证或租户隔离。完整命令、错误码与并发语义见 [任务HTTP接口](docs/decisions/016-task-http-api.md)。
+
+2026-10-29：API专项11项通过（含3项真实PostgreSQL测试），全量181项通过、无跳过；独立Uvicorn进程的真实HTTP OpenAPI与数据库查询烟测通过。首次回归暴露已有假设超时测试依赖50毫秒执行速度，改为第二轮进入后触发真实超时，再完成回归；未调用真实模型，未做性能基准。
 
 ## 窗口证据与冻结快照
 
