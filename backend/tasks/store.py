@@ -23,6 +23,10 @@ class TaskNotFound(ValueError):
     pass
 
 
+class EventCursorError(ValueError):
+    pass
+
+
 def validate_label(value):
     if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}", value):
         raise ValueError("标识须为1至100位字母、数字或_.:-")
@@ -55,6 +59,28 @@ class TaskStore:
             if not conn.execute("SELECT version FROM task_schema_versions WHERE version=2").fetchone():
                 conn.execute(Path(__file__).with_name("lease_migration.sql").read_text(encoding="utf-8"))
                 conn.execute("INSERT INTO task_schema_versions VALUES (2)")
+            if not conn.execute("SELECT version FROM task_schema_versions WHERE version=3").fetchone():
+                conn.execute(Path(__file__).with_name("events_migration.sql").read_text(encoding="utf-8"))
+                conn.execute("INSERT INTO task_schema_versions VALUES (3)")
+
+    def read_events(self, task_id, after=0, limit=100):
+        if type(after) is not int or not 0 <= after <= 9223372036854775807:
+            raise EventCursorError("invalid_event_cursor")
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("invalid_event_limit")
+        task_id = UUID(str(task_id))
+        with self.connection() as conn:
+            # 先读状态，再读事件。若状态已终结，随后查询一定能读到同事务事件。
+            task = conn.execute("SELECT state FROM investigation_tasks WHERE id=%s", (task_id,)).fetchone()
+            if task is None:
+                raise TaskNotFound("task_not_found")
+            latest = conn.execute("SELECT COALESCE(MAX(sequence), 0) AS seq FROM task_events WHERE task_id=%s",
+                                  (task_id,)).fetchone()["seq"]
+            if after > latest:
+                raise EventCursorError("event_cursor_ahead")
+            events = conn.execute("""SELECT * FROM task_events WHERE task_id=%s AND sequence>%s
+                ORDER BY sequence LIMIT %s""", (task_id, after, limit)).fetchall()
+            return {"events": events, "terminal": task["state"] in ("completed", "failed", "cancelled")}
 
     def submit(self, request: TaskRequest, idempotency_key: str):
         validate_label(idempotency_key)

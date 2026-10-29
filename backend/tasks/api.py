@@ -7,14 +7,15 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 import psycopg
-from fastapi import FastAPI, Header, Request, Response
+from fastapi import FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from backend.investigation.snapshot_store import SnapshotStore
 from .models import TaskRecord, TaskRequest
-from .store import TaskConflict, TaskNotFound, TaskStore
+from .store import TaskConflict, TaskNotFound, TaskStore, EventCursorError
+from .events import stream_events
 
 
 class TaskView(BaseModel):
@@ -73,6 +74,21 @@ def create_app(store=None, snapshots=None):
     async def conflict(request: Request, exc: TaskConflict):
         code = str(exc) if str(exc) in {"idempotency_key_conflict", "task_not_queued"} else "task_conflict"
         return JSONResponse({"error": {"code": code}}, status_code=409)
+
+    @app.exception_handler(EventCursorError)
+    async def cursor_error(request: Request, exc: EventCursorError):
+        return JSONResponse({"error": {"code": "invalid_event_cursor"}}, status_code=409)
+
+    @app.get("/tasks/{task_id}/events")
+    def events(task_id: UUID,
+               after: Annotated[int, Query(ge=0, le=9223372036854775807)] = 0,
+               last_event_id: Annotated[str | None, Header(pattern=r"^[0-9]{1,19}$")] = None):
+        cursor = int(last_event_id) if last_event_id is not None else after
+        initial = store.read_events(task_id, cursor)
+        if initial["terminal"] and not initial["events"]:
+            return Response(status_code=204)
+        return StreamingResponse(stream_events(store, task_id, cursor, initial),
+            media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.post("/tasks", response_model=TaskView, status_code=202)
     def submit(request: TaskRequest, response: Response,

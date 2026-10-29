@@ -23,6 +23,7 @@
 - [x] PostgreSQL 持久化任务、幂等提交、互斥领取与一次性 Worker，真实数据库集成验收通过。
 - [x] 任务 HTTP API：幂等提交、状态/结果查询、排队取消，复用独立租约 Worker。
 - [x] 常驻 Worker：连续消费、基础设施失败有限退避、停止信号排空退出。
+- [x] 持久化任务状态事件与SSE断线续传：同事务写入、任务内编号、游标补读。
 - [ ] 服务化工作台、审批处置、批量评测。
 
 目前已完成最小故障实验环境、规则基线和最小模型调查闭环；五场景验收不代表完整评测体系或泛化能力。
@@ -38,6 +39,8 @@ HTTP入口使用 `python -m uvicorn backend.tasks.api:create_app --factory --hos
 2026-10-29：API专项11项通过（含3项真实PostgreSQL测试），全量181项通过、无跳过；独立Uvicorn进程的真实HTTP OpenAPI与数据库查询烟测通过。首次回归暴露已有假设超时测试依赖50毫秒执行速度，改为第二轮进入后触发真实超时，再完成回归；未调用真实模型，未做性能基准。
 
 常驻消费入口：`python -m backend.tasks --snapshots .snapshots work --worker-id worker-1`。每个进程串行消费，空队列等待；数据库连接异常与租约冲突有限抖动退避，连续失败默认5次退出。Ctrl+C或SIGTERM请求停止新轮次，等待当前轮次完成；调查失败不阻止后续任务。启动前同样设置数据库地址并完成init。设计、运行及退出限制见 [常驻Worker](docs/decisions/017-continuous-worker.md)。2026-10-29新增13项测试（含2项真实PostgreSQL），全量194项通过、无跳过；未验证Linux容器停止或做性能压测。
+
+新增 `GET /tasks/{id}/events` SSE接口，支持 `Last-Event-ID` 和 `after` 游标补读。任务状态与事件通过数据库触发器同事务提交，重复提交和心跳不新增事件；终态补读完后重连返回204。升级前停止API/Worker并运行 `backend.tasks init`，现存任务只回填当前状态snapshot。2026-10-29专项12项、全量206项通过无跳过，包含真实HTTP断开后补读验收。仅记录生命周期事件，不包含逐步模型/工具执行或checkpoint，详见 [持久化事件与SSE](docs/decisions/018-task-events.md)。
 
 ## 窗口证据与冻结快照
 
