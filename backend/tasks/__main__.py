@@ -14,6 +14,7 @@ from backend.investigation.snapshot_store import SnapshotStore
 from .models import TaskRequest
 from .store import TaskStore, TaskConflict, TaskNotFound
 from .worker import run_once, WorkerCancelled
+from .daemon import run_service
 
 
 async def run_cli(store, snapshots, worker_id, lease_seconds=30):
@@ -42,6 +43,11 @@ def main(argv=None):
     work = commands.add_parser("work-once")
     work.add_argument("--worker-id", required=True)
     work.add_argument("--lease-seconds", type=int, default=30)
+    daemon = commands.add_parser("work", help="持续消费任务；停止信号等待当前调查结束")
+    daemon.add_argument("--worker-id", required=True)
+    daemon.add_argument("--lease-seconds", type=int, default=30)
+    daemon.add_argument("--poll-seconds", type=float, default=1)
+    daemon.add_argument("--max-errors", type=int, default=5)
     args = parser.parse_args(argv)
     dsn = os.environ.get("TASK_DATABASE_URL")
     if not dsn:
@@ -49,6 +55,9 @@ def main(argv=None):
         return 2
     store = TaskStore(dsn)
     try:
+        if args.command == "work":
+            return asyncio.run(run_service(store, SnapshotStore(args.snapshots), args.worker_id,
+                lease_seconds=args.lease_seconds, poll_seconds=args.poll_seconds, max_errors=args.max_errors))
         if args.command == "init":
             store.initialize()
             print('{"initialized": true}')
