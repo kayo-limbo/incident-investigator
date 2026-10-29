@@ -37,3 +37,5 @@ class TaskRecord(BaseModel):
     finished_at: datetime | None
     result: dict | None
     error_code: str | None
+    lease_expires_at: datetime | None
+    attempt_count: int

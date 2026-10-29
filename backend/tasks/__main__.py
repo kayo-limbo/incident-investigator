@@ -16,9 +16,9 @@ from .store import TaskStore, TaskConflict, TaskNotFound
 from .worker import run_once, WorkerCancelled
 
 
-async def run_cli(store, snapshots, worker_id):
+async def run_cli(store, snapshots, worker_id, lease_seconds=30):
     try:
-        return await run_once(store, snapshots, worker_id)
+        return await run_once(store, snapshots, worker_id, lease_seconds)
     except WorkerCancelled as exc:
         return exc.task
 
@@ -28,6 +28,7 @@ def main(argv=None):
     parser.add_argument("--snapshots", type=Path, default=Path(".snapshots"))
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("init")
+    commands.add_parser("recover")
     submit = commands.add_parser("submit")
     submit.add_argument("snapshot_id")
     submit.add_argument("--idempotency-key", required=True)
@@ -38,7 +39,9 @@ def main(argv=None):
     submit.add_argument("--repeat-query-policy", choices=("stop", "allow"), default="stop")
     for command in ("get", "cancel"):
         commands.add_parser(command).add_argument("task_id", type=UUID)
-    commands.add_parser("work-once").add_argument("--worker-id", required=True)
+    work = commands.add_parser("work-once")
+    work.add_argument("--worker-id", required=True)
+    work.add_argument("--lease-seconds", type=int, default=30)
     args = parser.parse_args(argv)
     dsn = os.environ.get("TASK_DATABASE_URL")
     if not dsn:
@@ -50,6 +53,10 @@ def main(argv=None):
             store.initialize()
             print('{"initialized": true}')
             return 0
+        if args.command == "recover":
+            tasks = store.recover_expired()
+            print(json.dumps({"recovered": [str(task.id) for task in tasks]}))
+            return 0
         if args.command == "submit":
             request = TaskRequest(**{name: getattr(args, name) for name in TaskRequest.model_fields})
             SnapshotStore(args.snapshots).read(request.snapshot_id)
@@ -59,7 +66,7 @@ def main(argv=None):
         elif args.command == "cancel":
             task = store.cancel_queued(args.task_id)
         else:
-            task = asyncio.run(run_cli(store, SnapshotStore(args.snapshots), args.worker_id))
+            task = asyncio.run(run_cli(store, SnapshotStore(args.snapshots), args.worker_id, args.lease_seconds))
         print(task.model_dump_json(indent=2) if task else '{"idle": true}')
         if args.command == "work-once" and task:
             return 130 if task.state == "cancelled" else (1 if task.state == "failed" else 0)

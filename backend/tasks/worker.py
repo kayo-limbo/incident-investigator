@@ -1,6 +1,9 @@
-"""一次领取一个任务；事务在调查开始前结束，不自动重试模型调用。"""
+"""一次领取一个任务；短事务、租约心跳与过期尝试有限接管。"""
 
 import asyncio
+import psycopg
+
+from .store import TaskConflict, validate_label, validate_lease
 
 from backend.investigation.async_investigation import (
     InvestigationCancelled, investigate_window_async, investigate_hypotheses_async,
@@ -30,13 +33,50 @@ async def execute(request, snapshots):
                             repeat_query_policy=request.repeat_query_policy)
 
 
-async def run_once(store, snapshots, worker_id):
+async def execute_with_lease(store, task, snapshots, lease_seconds):
+    async def heartbeat():
+        while True:
+            await asyncio.sleep(lease_seconds / 3)
+            store.renew(task.id, task.run_token, lease_seconds)
+
+    execution = asyncio.create_task(execute(task.request, snapshots))
+    renewal = asyncio.create_task(heartbeat())
+    try:
+        done, _ = await asyncio.wait((execution, renewal), return_when=asyncio.FIRST_COMPLETED)
+        # 续租失败优先处理，不再信任该尝试的执行结果。
+        if renewal in done:
+            renewal.result()
+        return execution.result()
+    except asyncio.CancelledError:
+        execution.cancel()
+        await asyncio.gather(execution, return_exceptions=True)
+        # gather 会把已取消 Task 的异常转成基础 CancelledError；从 Task 取回原报告。
+        try:
+            execution.result()
+        except InvestigationCancelled:
+            raise
+        except BaseException:
+            pass
+        raise
+    finally:
+        execution.cancel()
+        renewal.cancel()
+        await asyncio.gather(execution, renewal, return_exceptions=True)
+
+
+async def run_once(store, snapshots, worker_id, lease_seconds=30):
     # 独立单任务进程使用同步短事务；不要直接放入 Web 服务事件循环。
-    task = store.claim(worker_id)
+    validate_lease(lease_seconds)
+    validate_label(worker_id)
+    store.recover_expired()
+    task = store.claim(worker_id, lease_seconds)
     if task is None:
         return None
     try:
-        report = await execute(task.request, snapshots)
+        report = await execute_with_lease(store, task, snapshots, lease_seconds)
+    except (TaskConflict, psycopg.Error):
+        # 失去所有权或数据库不可用：停止本地执行，不冒险覆盖或重新提交失败结果。
+        raise
     except InvestigationCancelled as exc:
         saved = store.finish(task.id, task.run_token, exc.report)
         raise WorkerCancelled(saved) from None

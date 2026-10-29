@@ -27,7 +27,7 @@
 
 ## 持久化调查任务
 
-新增 PostgreSQL 任务表与 CLI：幂等提交、短事务领取、一次性 Worker、结果查询和队列取消；复用 fixed、agent、hypotheses 三种策略。实现与运行命令见 [持久化任务设计](docs/decisions/014-persistent-tasks.md)。尚无 Web API、租约或崩溃自动恢复，领取后进程退出会保留 running。
+新增 PostgreSQL 任务表与 CLI：幂等提交、短事务领取、一次性 Worker、结果查询和队列取消；复用 fixed、agent、hypotheses 三种策略。实现与运行命令见 [持久化任务设计](docs/decisions/014-persistent-tasks.md)。新增30秒默认租约与心跳，后续Worker可回收过期任务，最多三次尝试；旧令牌不能覆盖新结果。升级前停旧Worker并执行init，详见 [租约与恢复](docs/decisions/015-task-leases.md)。尚无Web API或常驻调度器，恢复会重新调查，可能重复模型调用。
 
 2026-10-28 已在 PostgreSQL 17.11 上通过 11 项数据库集成测试及 6 项任务单元测试，覆盖并发提交、互斥领取、锁跳过、事务释放、结果落库及 CLI 流程。此前因 Docker 启动失败留下的验证缺口已补齐；这不代表具备崩溃恢复能力，也不替代真实模型诊断评测。
 

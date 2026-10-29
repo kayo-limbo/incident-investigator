@@ -3,6 +3,8 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -78,6 +80,23 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                     adapter.return_value.__aenter__.return_value, 6, timeout_seconds=10,
                     max_total_tokens=200, repeat_query_policy="allow")
                 adapter.return_value.__aexit__.assert_awaited_once()
+
+    async def test_lost_lease_cancels_execution_without_writing_failure(self):
+        from backend.tasks.worker import run_once
+        from backend.tasks.store import TaskConflict
+        stopped = asyncio.Event()
+        async def pending(*args):
+            try:
+                await asyncio.Event().wait()
+            finally:
+                stopped.set()
+        self.store.renew.side_effect = TaskConflict("task_lease_lost")
+        with patch("backend.tasks.worker.execute", side_effect=pending):
+            with self.assertRaises(TaskConflict):
+                await asyncio.wait_for(run_once(self.store, None, "worker", 3), 5)
+        self.assertTrue(stopped.is_set())
+        self.store.finish.assert_not_called()
+        self.store.fail.assert_not_called()
 
 
 @unittest.skipUnless(DSN and importlib.util.find_spec("psycopg"), "requires TASK_TEST_DATABASE_URL and requirements-tasks.txt")
@@ -237,3 +256,122 @@ class TaskDatabaseTests(unittest.TestCase):
         self.assertEqual(saved.state, "failed")
         self.assertEqual(saved.error_code, "deadline_exceeded")
         self.assertEqual(self.store.get(saved.id).result, report.model_dump(mode="json"))
+
+    def expire(self, task):
+        with self.store.connection() as conn:
+            conn.execute("UPDATE investigation_tasks SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=%s",
+                         (task.id,))
+
+    def test_expired_owner_cannot_renew_finish_or_fail_even_before_recovery(self):
+        from backend.tasks.store import TaskConflict
+        self.store.submit(self.request, "expired")
+        old = self.store.claim("old")
+        self.expire(old)
+        for action in (lambda: self.store.renew(old.id, old.run_token),
+                       lambda: self.store.finish(old.id, old.run_token, self.report()),
+                       lambda: self.store.fail(old.id, old.run_token)):
+            with self.assertRaises(TaskConflict):
+                action()
+        self.assertEqual(self.store.recover_expired()[0].state, "queued")
+        new = self.store.claim("new")
+        self.assertNotEqual(new.run_token, old.run_token)
+        self.assertEqual(new.attempt_count, 2)
+        with self.assertRaises(TaskConflict):
+            self.store.finish(old.id, old.run_token, self.report())
+        self.assertEqual(self.store.finish(new.id, new.run_token, self.report()).state, "completed")
+
+    def test_recovery_is_concurrent_safe_and_attempts_are_bounded(self):
+        self.store.submit(self.request, "bounded")
+        for attempt in range(1, 4):
+            task = self.store.claim("worker")
+            self.assertEqual(task.attempt_count, attempt)
+            self.expire(task)
+            barrier = Barrier(4)
+            def recover(_):
+                barrier.wait()
+                return self.store.recover_expired()
+            with ThreadPoolExecutor(4) as pool:
+                recovered = [item for batch in pool.map(recover, range(4)) for item in batch]
+            self.assertEqual(len(recovered), 1)
+        self.assertIsNone(self.store.claim("worker"))
+        final = self.store.get(task.id)
+        self.assertEqual(final.error_code, "lease_attempts_exhausted")
+        self.assertEqual(final.state, "failed")
+
+    def test_heartbeat_extends_live_lease_and_stops_after_completion(self):
+        from backend.tasks.worker import run_once
+        self.store.submit(self.request, "heartbeat")
+        async def scenario():
+            renewed = asyncio.Event()
+            original_renew = self.store.renew
+            def renew(*args):
+                before = self.store.get(args[0]).lease_expires_at
+                result = original_renew(*args)
+                self.assertGreater(result.lease_expires_at, before)
+                renewed.set()
+                return result
+            async def pending(*args):
+                await asyncio.wait_for(renewed.wait(), 5)
+                return self.report()
+            with patch.object(self.store, "renew", side_effect=renew) as heartbeat, \
+                    patch("backend.tasks.worker.execute", side_effect=pending):
+                saved = await run_once(self.store, self.snapshots, "worker", 3)
+                self.assertEqual(saved.state, "completed")
+                self.assertIsNone(saved.lease_expires_at)
+                heartbeat.assert_called_once()
+                self.assertEqual(len(asyncio.all_tasks()), 1)
+        asyncio.run(scenario())
+
+    def test_external_cancel_preserves_partial_report(self):
+        from backend.tasks.worker import run_once, WorkerCancelled
+        from backend.investigation.async_investigation import InvestigationCancelled
+        task = self.store.submit(self.request, "cancel-running")
+        report = self.report().model_copy(update={"termination": "cancelled"})
+        async def scenario():
+            started = asyncio.Event()
+            async def pending(*args):
+                started.set()
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    raise InvestigationCancelled(report)
+            with patch("backend.tasks.worker.execute", side_effect=pending):
+                running = asyncio.create_task(run_once(self.store, self.snapshots, "worker"))
+                await started.wait()
+                running.cancel()
+                with self.assertRaises(WorkerCancelled):
+                    await running
+            self.assertEqual(len(asyncio.all_tasks()), 1)
+        asyncio.run(scenario())
+        self.assertEqual(self.store.get(task.id).result, report.model_dump(mode="json"))
+
+    def test_process_exit_after_claim_is_recovered_by_next_worker(self):
+        from backend.tasks.worker import run_once
+        task = self.store.submit(self.request, "process-exit")
+        script = ("import os,sys; from backend.tasks.store import TaskStore; "
+                  "s=TaskStore(os.environ['TASK_TEST_DATABASE_URL'],schema=sys.argv[1]); "
+                  "assert s.claim('crashed'); os._exit(0)")
+        subprocess.run([sys.executable, "-c", script, self.schema], check=True, timeout=15)
+        abandoned = self.store.get(task.id)
+        self.assertEqual(abandoned.state, "running")
+        # 控制数据库时钟边界，不等待30秒，也不声称测试了真实故障检测延迟。
+        self.expire(abandoned)
+        saved = asyncio.run(run_once(self.store, self.snapshots, "replacement"))
+        self.assertEqual(saved.state, "completed")
+        self.assertEqual(saved.attempt_count, 2)
+        self.assertNotEqual(saved.run_token, abandoned.run_token)
+
+    def test_upgrade_preserves_queued_and_quarantines_legacy_running(self):
+        running = self.store.submit(self.request, "legacy-running")
+        self.store.claim("legacy")
+        queued = self.store.submit(self.request, "legacy-queued")
+        with self.store.connection() as conn:
+            conn.execute("ALTER TABLE investigation_tasks DROP COLUMN lease_expires_at, DROP COLUMN attempt_count")
+            conn.execute("DROP TABLE task_schema_versions")
+        self.store.initialize()
+        self.store.initialize()
+        self.assertEqual(self.store.get(running.id).error_code, "legacy_running_without_lease")
+        self.assertEqual(self.store.get(queued.id).state, "queued")
+        claimed = self.store.claim("new")
+        self.store.initialize()
+        self.assertEqual(self.store.get(claimed.id).run_token, claimed.run_token)
