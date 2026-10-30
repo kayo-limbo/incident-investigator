@@ -53,3 +53,5 @@ flowchart LR
 由于旧执行器共享领域函数，新旧对照主要验证编排差异，不能代替既有领域单元测试和独立audit_history检查。未调用真实模型或重跑故障环境，测试不证明诊断准确率改善。真实模型对照需要另外冻结新协议和留出样本。
 
 接口核对来源：[Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api)、[持久化边界](https://docs.langchain.com/oss/python/langgraph/persistence)、[中断重执行语义](https://docs.langchain.com/oss/python/langgraph/interrupts)；本地核对安装版本的StateGraph和tracing_context签名。框架提供节点调度，领域校验、预算和评测由本项目实现；没有复制外部源码。
+
+后续：Worker 已接入串行图数据库检查点，第一阶段的无持久化边界已由 [恢复阶段记录](021-graph-recovery.md) 补充；独立 CLI 仍不持久化。

@@ -62,6 +62,9 @@ class TaskStore:
             if not conn.execute("SELECT version FROM task_schema_versions WHERE version=3").fetchone():
                 conn.execute(Path(__file__).with_name("events_migration.sql").read_text(encoding="utf-8"))
                 conn.execute("INSERT INTO task_schema_versions VALUES (3)")
+            if not conn.execute("SELECT version FROM task_schema_versions WHERE version=4").fetchone():
+                conn.execute(Path(__file__).with_name("graph_migration.sql").read_text(encoding="utf-8"))
+                conn.execute("INSERT INTO task_schema_versions VALUES (4)")
 
     def read_events(self, task_id, after=0, limit=100):
         if type(after) is not int or not 0 <= after <= 9223372036854775807:

@@ -34,8 +34,9 @@ class GraphState(TypedDict):
 class HypothesisGraphRun:
     """每次调查独占；latest仅用于取消时生成部分报告，不是持久化检查点。"""
 
-    def __init__(self, domain, model, budget, tokens):
+    def __init__(self, domain, model, budget, tokens, *, checkpointer=None, uncertain_turn=None):
         self.domain, self.model, self.budget, self.tokens = domain, model, budget, tokens
+        self.checkpointer, self.uncertain_turn = checkpointer, uncertain_turn
 
     def export(self):
         return dict(evidence=[e.model_dump(mode="json") for e in self.domain.session.evidence],
@@ -76,6 +77,8 @@ class HypothesisGraphRun:
             return self.output(stopped)
         if state["turn"] >= self.domain.session.max_tool_calls:
             return self.output(self.report(termination="budget_exhausted", reason="模型调用预算耗尽。"))
+        if self.checkpointer is not None:
+            await asyncio.to_thread(self.checkpointer.begin_call, state["turn"] + 1)
         started, status, error, raw = monotonic(), "ok", None, None
         try:
             raw = await self.model.decide(self.domain.context())
@@ -132,11 +135,28 @@ class HypothesisGraphRun:
                                ("commit", "tool"), ("tool", "decide")):
             graph.add_conditional_edges(source, lambda state: "end" if state["report"] is not None else "next",
                                         {"end": END, "next": target})
-        return graph.compile()  # 本阶段不配置checkpointer或自动节点重试。
+        return graph.compile(checkpointer=self.checkpointer)
 
     async def run(self):
         from .async_investigation import InvestigationCancelled
         try:
+            config = {"recursion_limit": 4 * self.domain.session.max_tool_calls + 2, "callbacks": []}
+            checkpoint = None
+            if self.checkpointer is not None:
+                config.update(self.checkpointer.config)
+                checkpoint = await self.checkpointer.aget_tuple(config)
+                if checkpoint:
+                    values = checkpoint.checkpoint["channel_values"]
+                    saved = values if "schema_version" in values else values.get("__start__")
+                    if saved:
+                        self.restore(saved)
+                        if saved.get("report") is not None:
+                            return HypothesisReport.model_validate_json(json.dumps(saved["report"]))
+                if self.uncertain_turn is not None:
+                    self.domain.session.usage.calls.append(CallUsage(kind="model", name="decide",
+                        status="error", error_code="interrupted_call_usage_unknown", elapsed_ms=0))
+                    return self.report(termination="usage_unavailable",
+                                       reason="上次模型调用结果未可靠落库，停止自动重发；用量未知。")
             self.budget.check()
             async with asyncio.timeout(self.budget.remaining_seconds()):
                 if self.domain.session._payload is None:
@@ -145,8 +165,8 @@ class HypothesisGraphRun:
                            "turn": 0, "raw": None, "prepared": None, "report": None}
                 # 明确禁用框架远程追踪，避免继承环境变量后上传证据。
                 with tracing_context(enabled=False):
-                    result = await self.compile().ainvoke(initial,
-                        config={"recursion_limit": 4 * self.domain.session.max_tool_calls + 2, "callbacks": []})
+                    result = await self.compile().ainvoke(None if checkpoint else initial,
+                        config=config, **({"durability": "sync"} if self.checkpointer is not None else {}))
                 return HypothesisReport.model_validate_json(json.dumps(result["report"]))
         except RepeatedQueryDetected as exc:
             result = self.report(termination="repeated_query", reason="重复读取同一冻结Trace不会增加证据，停止调查。")

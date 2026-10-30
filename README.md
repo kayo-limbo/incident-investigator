@@ -30,7 +30,9 @@
 
 ## 持久化调查任务
 
-2026-10-30：异步 `hypotheses` 已迁移到LangGraph的决策、校验、状态接纳、工具执行四个节点，CLI和Worker继续使用原策略名。先安装 `requirements-graph.txt`；报告标识为 `window_hypotheses_langgraph_v1`。共享原有领域校验和预算，旧循环冻结为回归参考。本阶段只有图编排，尚未接入图检查点、多Agent或人工审批，任务租约接管仍从头调查。设计、安装及验证边界见 [LangGraph假设调查](docs/decisions/020-langgraph-hypotheses.md)。
+2026-10-30：异步 `hypotheses` 已迁移到LangGraph的决策、校验、状态接纳、工具执行四个节点，CLI和Worker继续使用原策略名。先安装 `requirements-graph.txt`；报告标识为 `window_hypotheses_langgraph_v1`。共享原有领域校验和预算，旧循环冻结为回归参考。设计、安装及验证边界见 [LangGraph假设调查](docs/decisions/020-langgraph-hypotheses.md)。
+
+Worker 的 `hypotheses` 现已接入 PostgreSQL 步骤检查点：租约接管后恢复已提交状态，累计调用与 token 用量，停机时间计入调查时限；模型请求结果未可靠落库时停止自动重发并报告用量未知。升级前停止 API 和全部 Worker，执行 `python -m backend.tasks init` 迁移至 schema 4。独立调查 CLI 不持久化，其他策略仍从头执行；尚无多 Agent、人工审批或有副作用的处置。适配器仅支持当前串行图，详见 [调查恢复与租约一致性](docs/decisions/021-graph-recovery.md)。
 
 新增 PostgreSQL 任务表与 CLI：幂等提交、短事务领取、一次性 Worker、结果查询和队列取消；复用 fixed、agent、hypotheses 三种策略。实现与运行命令见 [持久化任务设计](docs/decisions/014-persistent-tasks.md)。新增30秒默认租约与心跳，后续Worker可回收过期任务，最多三次尝试；旧令牌不能覆盖新结果。升级前停旧Worker并执行init，详见 [租约与恢复](docs/decisions/015-task-leases.md)。已有本地任务HTTP API和常驻消费者，恢复会重新调查，可能重复模型调用。
 

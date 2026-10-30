@@ -39,7 +39,11 @@ async def execute_with_lease(store, task, snapshots, lease_seconds):
             await asyncio.sleep(lease_seconds / 3)
             store.renew(task.id, task.run_token, lease_seconds)
 
-    execution = asyncio.create_task(execute(task.request, snapshots))
+    if task.request.strategy == "hypotheses":
+        from .checkpoints import execute_persistent
+        execution = asyncio.create_task(execute_persistent(store, task, snapshots))
+    else:
+        execution = asyncio.create_task(execute(task.request, snapshots))
     renewal = asyncio.create_task(heartbeat())
     try:
         done, _ = await asyncio.wait((execution, renewal), return_when=asyncio.FIRST_COMPLETED)

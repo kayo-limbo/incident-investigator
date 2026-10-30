@@ -169,9 +169,11 @@ class AsyncInvestigationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(model._client.is_closed)
 
     async def test_cancel_closes_response_stream(self):
+        entered = asyncio.Event()
         class WaitingStream(httpx.AsyncByteStream):
             closed = False
             async def __aiter__(self):
+                entered.set()
                 yield b'{'
                 await asyncio.Event().wait()
             async def aclose(self):
@@ -179,8 +181,15 @@ class AsyncInvestigationTests(unittest.IsolatedAsyncioTestCase):
         stream = WaitingStream()
         async with AsyncWindowChatModel(self.config, transport=httpx.MockTransport(
                 lambda request: httpx.Response(200, stream=stream))) as model:
-            result = await investigate_window_async(self.store, self.key, model, timeout_seconds=0.05)
-        self.assertEqual(result.termination, "deadline_exceeded")
+            task = asyncio.create_task(investigate_window_async(self.store, self.key, model))
+            try:
+                await asyncio.wait_for(entered.wait(), 5)
+                task.cancel()
+                with self.assertRaises(InvestigationCancelled):
+                    await task
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
         self.assertTrue(stream.closed)
         self.assertTrue(model._client.is_closed)
 
