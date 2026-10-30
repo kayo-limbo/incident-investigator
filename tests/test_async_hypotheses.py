@@ -52,7 +52,7 @@ class AsyncHypothesisTests(unittest.IsolatedAsyncioTestCase):
         sync = investigate_hypotheses(self.store, self.key, Scripted(*actions))
         result = await investigate_hypotheses_async(self.store, self.key, AsyncScripted(*actions))
         self.assertEqual(result.termination, "completed")
-        self.assertEqual(result.strategy, "window_hypotheses_async_v1")
+        self.assertEqual(result.strategy, "window_hypotheses_langgraph_v1")
         self.assertEqual(result.finding, sync.finding)
         self.assertEqual(result.hypothesis_history, sync.hypothesis_history)
         self.assertEqual(result.claim_hypothesis_versions, {"slow": 2, "pool": 2})

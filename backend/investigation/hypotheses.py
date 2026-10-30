@@ -44,6 +44,20 @@ class HypothesisLedger:
         self._history = []
         self._current = {}
 
+    @classmethod
+    def from_history(cls, history):
+        """重建受信任的图内状态；不作为外部检查点导入或语义验证接口。"""
+        ledger = cls()
+        for data in history:
+            revision = HypothesisRevision.model_validate(data).model_copy(deep=True)
+            previous = ledger._current.get(revision.id)
+            expected = previous.version if previous else 0
+            if revision.expected_version != expected or revision.version != expected + 1:
+                raise ValueError("hypothesis_version_conflict")
+            ledger._history.append(revision)
+            ledger._current[revision.id] = revision
+        return ledger
+
     @property
     def history(self):
         return copy.deepcopy(self._history)

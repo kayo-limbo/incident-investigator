@@ -82,53 +82,14 @@ class HypothesisInvestigationState:
                          for t in self.tasks]).model_copy(deep=True)
 
     def apply(self, raw, turn, budget=None):
-        session = self.session
-        base_versions = {key: h.version for key, h in self.ledger.current.items()}
-        try:
-            action = HYPOTHESIS_ACTION.validate_python(raw)
-        except ValidationError as exc:
-            result = self.report(termination="invalid_action", reason="模型动作不符合假设协议。", error="invalid_schema")
-            # 仅记录位置与错误类型，不保存供应商原文、input 或上下文值。
-            result.validation_issues = [".".join(map(str, issue["loc"])) + ":" + issue["type"]
-                                        for issue in exc.errors(include_input=False, include_context=False)][:24]
+        from .hypothesis_steps import prepare_action, commit_action, execute_query
+        prepared = prepare_action(self, raw, turn, budget)
+        if isinstance(prepared, HypothesisReport):
+            return prepared
+        result = commit_action(self, prepared, budget)
+        if result is not None:
             return result
-        try:
-            updates = [HypothesisUpdate(**h.model_dump(), expected_version=base_versions.get(h.id, 0)) for h in action.updates]
-            candidate = self.ledger.propose(updates, session, turn)
-            versions = candidate.versions(action.hypothesis_ids)
-            if isinstance(action, HypothesisFinish):
-                session.validate_finding(action.finding)
-                versions = candidate.validate_claim(action.finding, action.hypothesis_ids)
-            elif session.remaining <= 0:
-                return self.report(termination="budget_exhausted", reason="工具调用预算耗尽。")
-            elif action.trace_id not in session._payload["traces"]:
-                raise ValueError("trace_outside_snapshot")
-        except ValueError as exc:
-            result = self.report(termination="invalid_finding" if isinstance(action, HypothesisFinish) else "invalid_action",
-                            reason="状态或证据引用校验失败，保留上一个有效版本。", error=str(exc))
-            if isinstance(action, HypothesisFinish):
-                result.rejected_finding = action.finding.model_copy(deep=True)
-            result.rejected_action = action.model_copy(deep=True)
-            return result
-        if budget is not None:
-            budget.check()
-        if isinstance(action, HypothesisQuery):
-            # 整个重复查询动作（包括随附的假设更新）都不提交。
-            session.check_repeated_query(action.trace_id)
-        self.ledger = candidate
-        if isinstance(action, HypothesisFinish):
-            return self.report(action.finding, versions=versions)
-        task = QueryTask(turn=turn, trace_id=action.trace_id, purpose=action.purpose,
-                         hypothesis_versions=versions, status="failed", cost_tool_calls=0)
-        self.tasks.append(task)
-        try:
-            evidence = session.drilldown(action.trace_id)
-        except ValueError as exc:
-            task.error_code = str(exc)
-            return self.report(termination="source_error", reason="下钻失败，保留查询记录。")
-        task.status, task.evidence_id, task.cost_tool_calls = "completed", evidence.id, 1
-        if budget is not None:
-            budget.check()
+        return execute_query(self, prepared, budget)
 
 
 def investigate_hypotheses(store, snapshot_id, model, max_tool_calls=6):

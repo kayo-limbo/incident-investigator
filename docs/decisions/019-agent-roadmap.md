@@ -58,6 +58,6 @@ LangGraph承担节点调度、条件跳转、检查点与中断；领域代码�
 
 ## 当前迁移状态
 
-已在本地虚拟环境安装LangGraph1.2.18，但尚未实现图执行或检查点。上一轮开始的hypothesis_steps提取仍是未提交、未验收草稿；不能记为“已完成LangGraph迁移”。下一实现里程碑限定为阶段1，并先审查状态序列化边界，避免把整个旧循环包为一个节点。
+2026-10-30：阶段1已完成四节点假设调查迁移，异步CLI与Worker使用图入口，共享领域校验并提供旧循环对照。图状态进行JSON往返验证，但尚无检查点、跨进程恢复或多Agent。实现与限制见 [阶段1记录](020-langgraph-hypotheses.md)。后续按阶段2/3推进调查质量与持久化恢复。
 
 参考：[LangGraph图API](https://docs.langchain.com/oss/python/langgraph/graph-api)、[持久化](https://docs.langchain.com/oss/python/langgraph/persistence)、[中断](https://docs.langchain.com/oss/python/langgraph/interrupts)、[LangChain多Agent模式](https://docs.langchain.com/oss/python/langchain/multi-agent)、[Anthropic多Agent研究系统](https://www.anthropic.com/research/multi-agent-research-system)。这些资料说明可选机制及取舍，不能替代本项目的效果验收。
