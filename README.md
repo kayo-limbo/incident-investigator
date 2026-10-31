@@ -30,6 +30,8 @@
 
 ## 持久化调查任务
 
+下一里程碑（2026-10-31 调整，尚未实现）：将普通窗口 `agent` 的正式异步主循环完整迁移到 LangGraph，覆盖模型决策、动作校验、工具执行与结束判断，并为 Worker 接入步骤检查点、租约隔离、跨重启预算和未知调用停止。CLI 与 Worker 共用图流程，CLI 不持久化，Worker 持久化；复用模型适配器、证据工具、领域校验、预算和报告结构。先完成串行调查与恢复，同步兼容入口保持现状，多 Agent 分支与协作留待后续。范围、文件级任务及验收门槛见 [普通 agent 迁移计划](docs/decisions/022-langgraph-agent-plan.md)，整体顺序见 [Agent 路线](docs/decisions/019-agent-roadmap.md)。
+
 2026-10-30：异步 `hypotheses` 已迁移到LangGraph的决策、校验、状态接纳、工具执行四个节点，CLI和Worker继续使用原策略名。先安装 `requirements-graph.txt`；报告标识为 `window_hypotheses_langgraph_v1`。共享原有领域校验和预算，旧循环冻结为回归参考。设计、安装及验证边界见 [LangGraph假设调查](docs/decisions/020-langgraph-hypotheses.md)。
 
 Worker 的 `hypotheses` 现已接入 PostgreSQL 步骤检查点：租约接管后恢复已提交状态，累计调用与 token 用量，停机时间计入调查时限；模型请求结果未可靠落库时停止自动重发并报告用量未知。升级前停止 API 和全部 Worker，执行 `python -m backend.tasks init` 迁移至 schema 4。独立调查 CLI 不持久化，其他策略仍从头执行；尚无多 Agent、人工审批或有副作用的处置。适配器仅支持当前串行图，详见 [调查恢复与租约一致性](docs/decisions/021-graph-recovery.md)。
