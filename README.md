@@ -30,13 +30,13 @@
 
 ## 持久化调查任务
 
-下一里程碑（2026-10-31 调整，尚未实现）：将普通窗口 `agent` 的正式异步主循环完整迁移到 LangGraph，覆盖模型决策、动作校验、工具执行与结束判断，并为 Worker 接入步骤检查点、租约隔离、跨重启预算和未知调用停止。CLI 与 Worker 共用图流程，CLI 不持久化，Worker 持久化；复用模型适配器、证据工具、领域校验、预算和报告结构。先完成串行调查与恢复，同步兼容入口保持现状，多 Agent 分支与协作留待后续。范围、文件级任务及验收门槛见 [普通 agent 迁移计划](docs/decisions/022-langgraph-agent-plan.md)，整体顺序见 [Agent 路线](docs/decisions/019-agent-roadmap.md)。
+2026-10-31：普通窗口 `agent` 的正式异步主循环已迁移到 LangGraph，覆盖模型决策、动作校验、工具执行与结束判断。CLI 和 Worker 共用图流程，CLI 不持久化，Worker 使用步骤检查点、租约隔离、跨重启预算和未知调用停止；报告标识为 `window_react_langgraph_v1`。旧异步循环仅保留为迁移测试对照，同步兼容入口保持现状。全量238项测试通过，无跳过，包含真实PostgreSQL与子进程恢复；未调用真实模型，不代表诊断质量提升。实现、升级边界与验收见 [普通 agent 串行图与恢复](docs/decisions/023-langgraph-agent.md)。下一步回到调查质量与独立样本，多 Agent 分支与协作仍后置。
 
 2026-10-30：异步 `hypotheses` 已迁移到LangGraph的决策、校验、状态接纳、工具执行四个节点，CLI和Worker继续使用原策略名。先安装 `requirements-graph.txt`；报告标识为 `window_hypotheses_langgraph_v1`。共享原有领域校验和预算，旧循环冻结为回归参考。设计、安装及验证边界见 [LangGraph假设调查](docs/decisions/020-langgraph-hypotheses.md)。
 
-Worker 的 `hypotheses` 现已接入 PostgreSQL 步骤检查点：租约接管后恢复已提交状态，累计调用与 token 用量，停机时间计入调查时限；模型请求结果未可靠落库时停止自动重发并报告用量未知。升级前停止 API 和全部 Worker，执行 `python -m backend.tasks init` 迁移至 schema 4。独立调查 CLI 不持久化，其他策略仍从头执行；尚无多 Agent、人工审批或有副作用的处置。适配器仅支持当前串行图，详见 [调查恢复与租约一致性](docs/decisions/021-graph-recovery.md)。
+Worker 的 `hypotheses` 和 `agent` 现已接入 PostgreSQL 步骤检查点：租约接管后恢复已提交状态，累计调用与 token 用量，停机时间计入调查时限；模型请求结果未可靠落库时停止自动重发并报告用量未知。升级前停止 API 和全部 Worker，执行 `python -m backend.tasks init` 迁移至 schema 4。独立调查 CLI 不持久化，`fixed` 策略仍从头执行；尚无多 Agent、人工审批或有副作用的处置。适配器仅支持当前串行图，详见 [调查恢复与租约一致性](docs/decisions/021-graph-recovery.md)。
 
-新增 PostgreSQL 任务表与 CLI：幂等提交、短事务领取、一次性 Worker、结果查询和队列取消；复用 fixed、agent、hypotheses 三种策略。实现与运行命令见 [持久化任务设计](docs/decisions/014-persistent-tasks.md)。新增30秒默认租约与心跳，后续Worker可回收过期任务，最多三次尝试；旧令牌不能覆盖新结果。升级前停旧Worker并执行init，详见 [租约与恢复](docs/decisions/015-task-leases.md)。已有本地任务HTTP API和常驻消费者，恢复会重新调查，可能重复模型调用。
+新增 PostgreSQL 任务表与 CLI：幂等提交、短事务领取、一次性 Worker、结果查询和队列取消；复用 fixed、agent、hypotheses 三种策略。实现与运行命令见 [持久化任务设计](docs/decisions/014-persistent-tasks.md)。新增30秒默认租约与心跳，后续Worker可回收过期任务，最多三次尝试；旧令牌不能覆盖新结果。升级前停旧Worker并执行init，详见 [租约与恢复](docs/decisions/015-task-leases.md)。已有本地任务HTTP API和常驻消费者；两种异步模型策略现按检查点恢复，历史无检查点任务仍需从头开始。
 
 2026-10-28 已在 PostgreSQL 17.11 上通过 11 项数据库集成测试及 6 项任务单元测试，覆盖并发提交、互斥领取、锁跳过、事务释放、结果落库及 CLI 流程。此前因 Docker 启动失败留下的验证缺口已补齐；后续租约阶段补充了进程退出与接管验证，范围见上述租约文档，不替代真实模型诊断评测。
 
@@ -66,7 +66,7 @@ HTTP入口使用 `python -m uvicorn backend.tasks.api:create_app --factory --hos
 
 新增窗口规则与 Agent 入口，共享快照、摘要、请求索引和默认六次工具调用上限；确定性结论要求引用已下钻的具体字段。窗口报告记录模型/工具调用、token、耗时与终止原因，缺失 token 记为未知。原单 Trace 入口继续保留。设计见 [窗口调查协议](docs/decisions/007-window-investigation.md)，真实结果与失败复盘见 [四场景对照](docs/experiments/window-comparison.md)。
 
-新增 `hypotheses` 策略，在同一快照上维护假设版本、支持与反证、待检查项及查询目的，最终结论关联具体假设版本和观测字段。非法更新整批拒绝，保留已有状态。结构校验不证明语义或因果正确；CLI 已支持总时限、取消与可选累计token停止阈值，进程恢复尚未实现。设计与命令见 [显式假设协议](docs/decisions/008-hypothesis-investigation.md)，真实失败与结果见 [假设策略对照](docs/experiments/hypothesis-comparison.md)。
+新增 `hypotheses` 策略，在同一快照上维护假设版本、支持与反证、待检查项及查询目的，最终结论关联具体假设版本和观测字段。非法更新整批拒绝，保留已有状态。结构校验不证明语义或因果正确；CLI 已支持总时限、取消与可选累计token停止阈值，Worker 的进程恢复见上文。设计与命令见 [显式假设协议](docs/decisions/008-hypothesis-investigation.md)，真实失败与结果见 [假设策略对照](docs/experiments/hypothesis-comparison.md)。
 
 ```powershell
 # snapshot_id 来自 window_cli query 输出；默认 fixed 无需模型

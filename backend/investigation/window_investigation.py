@@ -282,7 +282,15 @@ def _run_window_agent(session, model, max_tool_calls, strategy, budget):
 
 
 def apply_window_action(session, raw, strategy, budget):
-    """共享动作验证与执行；返回报告或 None（继续调查）。"""
+    """同步兼容组合；图编排分别调用校验和执行阶段。"""
+    prepared = prepare_window_action(session, raw, strategy, budget)
+    if isinstance(prepared, WindowReport):
+        return prepared
+    return execute_window_action(session, prepared, strategy, budget)
+
+
+def prepare_window_action(session, raw, strategy, budget):
+    """验证动作与引用；不执行工具，不接纳迟到结论。"""
     try:
         action = WINDOW_ACTION.validate_python(raw)
     except ValidationError:
@@ -299,8 +307,19 @@ def apply_window_action(session, raw, strategy, budget):
         return session.report(strategy, action.finding)
     if session.remaining <= 0:
         return session.report(strategy, termination="budget_exhausted", reason="工具调用预算耗尽。")
+    if session._payload is None or action.trace_id not in session._payload["traces"]:
+        return session.report(strategy, termination="invalid_action", reason="请求不属于绑定快照。")
+    session.check_repeated_query(action.trace_id)
+    budget.check()
+    return action
+
+
+def execute_window_action(session, action, strategy, budget):
+    """执行前重验预算；drilldown重新检查范围、次数和重复查询。"""
+    budget.check()
+    if session.remaining <= 0:
+        return session.report(strategy, termination="budget_exhausted", reason="工具调用预算耗尽。")
     try:
-        budget.check()
         session.drilldown(action.trace_id)
     except ValueError:
         return session.report(strategy, termination="invalid_action", reason="请求不属于绑定快照。")

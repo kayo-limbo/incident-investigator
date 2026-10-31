@@ -39,7 +39,7 @@ async def execute_with_lease(store, task, snapshots, lease_seconds):
             await asyncio.sleep(lease_seconds / 3)
             store.renew(task.id, task.run_token, lease_seconds)
 
-    if task.request.strategy == "hypotheses":
+    if task.request.strategy in ("agent", "hypotheses"):
         from .checkpoints import execute_persistent
         execution = asyncio.create_task(execute_persistent(store, task, snapshots))
     else:

@@ -1,4 +1,4 @@
-"""针对串行假设图的检查点适配器；任务行锁使租约验证与写入原子化。"""
+"""串行调查图的检查点适配器；任务行锁使租约验证与写入原子化。"""
 
 import asyncio
 from contextlib import contextmanager
@@ -11,11 +11,12 @@ from .store import TaskConflict
 
 
 class LeaseCheckpointSaver(BaseCheckpointSaver):
-    PROTOCOL = "hypotheses-graph-v1"
+    PROTOCOLS = {"hypotheses": "hypotheses-graph-v1", "agent": "agent-graph-v1"}
 
     def __init__(self, store, task):
         super().__init__()
         self.store, self.task = store, task
+        self.protocol = self.PROTOCOLS[task.request.strategy]
         self.config = {"configurable": {"thread_id": str(task.id), "checkpoint_ns": ""}}
 
     def validate_config(self, config):
@@ -40,10 +41,10 @@ class LeaseCheckpointSaver(BaseCheckpointSaver):
         with self.owned() as conn:
             conn.execute("""INSERT INTO task_graph_runs(task_id, protocol, request_hash, deadline)
                 VALUES (%s,%s,%s,clock_timestamp()+%s*interval '1 second') ON CONFLICT DO NOTHING""",
-                (self.task.id, self.PROTOCOL, self.task.request_hash, self.task.request.timeout_seconds))
+                (self.task.id, self.protocol, self.task.request_hash, self.task.request.timeout_seconds))
             row = conn.execute("""SELECT *, EXTRACT(EPOCH FROM deadline-clock_timestamp()) AS remaining
                 FROM task_graph_runs WHERE task_id=%s""", (self.task.id,)).fetchone()
-            if row["protocol"] != self.PROTOCOL or row["request_hash"] != self.task.request_hash:
+            if row["protocol"] != self.protocol or row["request_hash"] != self.task.request_hash:
                 raise TaskConflict("graph_protocol_or_request_mismatch")
             return row
 
@@ -99,12 +100,14 @@ class LeaseCheckpointSaver(BaseCheckpointSaver):
 
 async def execute_persistent(store, task, snapshots):
     from contextlib import AsyncExitStack
-    from backend.investigation.async_model import AsyncHypothesisChatModel
+    from backend.investigation.async_model import AsyncHypothesisChatModel, AsyncWindowChatModel
+    from backend.investigation.async_investigation import WindowInvestigationState
     from backend.investigation.model import ModelConfig
     from backend.investigation.budget import InvestigationBudget, ObservedTokenBudget
     from backend.investigation.window_investigation import FrozenWindowSession
     from backend.investigation.hypothesis_agent import HypothesisInvestigationState
     from backend.investigation.hypothesis_graph import HypothesisGraphRun
+    from backend.investigation.window_graph import WindowGraphRun
 
     saver = LeaseCheckpointSaver(store, task)
     started = monotonic()
@@ -114,7 +117,12 @@ async def execute_persistent(store, task, snapshots):
     request = task.request
     session = FrozenWindowSession(snapshots, request.snapshot_id, request.max_tool_calls,
                                   repeat_query_policy=request.repeat_query_policy)
-    domain = HypothesisInvestigationState(session, "window_hypotheses_langgraph_v1")
+    if request.strategy == "agent":
+        domain = WindowInvestigationState(session, "window_react_langgraph_v1")
+        runner, adapter_type = WindowGraphRun, AsyncWindowChatModel
+    else:
+        domain = HypothesisInvestigationState(session, "window_hypotheses_langgraph_v1")
+        runner, adapter_type = HypothesisGraphRun, AsyncHypothesisChatModel
     async with AsyncExitStack() as stack:
         class LazyModel:
             adapter = None
@@ -122,12 +130,12 @@ async def execute_persistent(store, task, snapshots):
 
             async def decide(self, context):
                 if self.adapter is None:
-                    self.adapter = await stack.enter_async_context(AsyncHypothesisChatModel(ModelConfig.from_env()))
+                    self.adapter = await stack.enter_async_context(adapter_type(ModelConfig.from_env()))
                 try:
                     return await self.adapter.decide(context)
                 finally:
                     self.last_usage = self.adapter.last_usage
 
-        return await HypothesisGraphRun(domain, LazyModel(), budget,
+        return await runner(domain, LazyModel(), budget,
             ObservedTokenBudget(request.max_total_tokens), checkpointer=saver,
             uncertain_turn=run_info["inflight_turn"]).run()

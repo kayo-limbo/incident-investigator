@@ -1,6 +1,6 @@
 # 调查恢复与租约一致性
 
-日期：2026-10-30。范围：Worker 的 hypotheses 策略；独立调查 CLI 不启用持久化。
+日期：2026-10-30。初始范围：Worker 的 hypotheses 策略；独立调查 CLI 不启用持久化。2026-10-31普通 `agent` 也已接入同一租约检查点机制，使用独立 `agent-graph-v1` 协议，schema仍为4，详见 [普通策略交付](023-langgraph-agent.md)。
 
 ## 解决的问题
 

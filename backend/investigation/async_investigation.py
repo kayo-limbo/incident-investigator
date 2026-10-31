@@ -19,6 +19,17 @@ class InvestigationCancelled(asyncio.CancelledError):
 async def investigate_window_async(store, snapshot_id, model, max_tool_calls=6, *,
                                    timeout_seconds=120, max_total_tokens=None, repeat_query_policy="stop"):
     budget = InvestigationBudget(timeout_seconds)
+    from .window_graph import WindowGraphRun
+    tokens = ObservedTokenBudget(max_total_tokens)
+    session = FrozenWindowSession(store, snapshot_id, max_tool_calls, repeat_query_policy=repeat_query_policy)
+    return await WindowGraphRun(WindowInvestigationState(session, "window_react_langgraph_v1"),
+                                model, budget, tokens).run()
+
+
+async def investigate_window_legacy_async(store, snapshot_id, model, max_tool_calls=6, *,
+                                          timeout_seconds=120, max_total_tokens=None, repeat_query_policy="stop"):
+    """冻结的迁移对照入口，不接CLI/Worker，不增加新编排功能。"""
+    budget = InvestigationBudget(timeout_seconds)
     tokens = ObservedTokenBudget(max_total_tokens)
     session = FrozenWindowSession(store, snapshot_id, max_tool_calls, repeat_query_policy=repeat_query_policy)
     return await _run_async(WindowInvestigationState(session), model, budget, tokens)
@@ -45,9 +56,9 @@ async def investigate_hypotheses_legacy_async(store, snapshot_id, model, max_too
 
 
 class WindowInvestigationState:
-    def __init__(self, session):
+    def __init__(self, session, strategy="window_react_async_v1"):
         self.session = session
-        self.strategy = "window_react_async_v1"
+        self.strategy = strategy
 
     def context(self):
         return self.session.context()

@@ -75,8 +75,18 @@ class AsyncInvestigationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_deadline_interrupts_wait_and_preserves_evidence(self):
         model = AsyncScripted(self.tool, "wait")
-        result = await asyncio.wait_for(investigate_window_async(
-            self.store, self.key, model, timeout_seconds=0.05), 2)
+        timeout = asyncio.timeout(None)
+        budget = InvestigationBudget(120, clock=lambda: 0)
+        with patch("backend.investigation.graph_runtime.asyncio.timeout", return_value=timeout), \
+                patch("backend.investigation.async_investigation.InvestigationBudget", return_value=budget):
+            task = asyncio.create_task(investigate_window_async(self.store, self.key, model))
+            try:
+                await asyncio.wait_for(model.entered.wait(), 3)
+                timeout.reschedule(asyncio.get_running_loop().time())
+                result = await asyncio.wait_for(task, 3)
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
         self.assertEqual(result.termination, "deadline_exceeded")
         self.assertTrue(model.cleaned)
         self.assertEqual(model.calls, 2)
