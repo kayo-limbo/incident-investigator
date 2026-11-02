@@ -98,16 +98,18 @@ def investigate_hypotheses(store, snapshot_id, model, max_tool_calls=6):
     if session._payload is None:
         return state.report(termination="source_error", reason="快照无法读取或无效。")
     for turn in range(1, max_tool_calls + 1):
+        detail = None
         started, status, error = monotonic(), "ok", None
         try:
             raw = model.decide(state.context())
         except ModelFailure as exc:
             status, error = "error", exc.code
+            detail = exc.detail
         except Exception:
             status, error = "error", "adapter_error"
         finally:
             session.usage.calls.append(CallUsage(kind="model", name="decide", status=status,
-                elapsed_ms=(monotonic() - started) * 1000, error_code=error,
+                elapsed_ms=(monotonic() - started) * 1000, error_code=error, failure_detail=detail,
                 **token_usage(getattr(model, "last_usage", None))))
         if status == "error":
             return state.report(termination="model_error", reason="模型调用失败，保留假设与证据。")

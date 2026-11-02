@@ -101,6 +101,7 @@ async def _run_async(state, model, budget, tokens):
                 stopped = token_stop()
                 if stopped is not None:
                     return stopped
+                detail = None
                 started, status, error = monotonic(), "ok", None
                 try:
                     raw = await model.decide(state.context())
@@ -109,11 +110,12 @@ async def _run_async(state, model, budget, tokens):
                     raise
                 except ModelFailure as exc:
                     status, error = "error", exc.code
+                    detail = exc.detail
                 except Exception:
                     status, error = "error", "adapter_error"
                 finally:
                     session.usage.calls.append(CallUsage(
-                        kind="model", name="decide", status=status, error_code=error,
+                        kind="model", name="decide", status=status, error_code=error, failure_detail=detail,
                         elapsed_ms=(monotonic() - started) * 1000,
                         **token_usage(getattr(model, "last_usage", None))))
                 # 即使同步解析阻塞了事件循环，迟到动作也不能生效。

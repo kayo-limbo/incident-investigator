@@ -72,6 +72,7 @@ class SerialGraphRun:
             return self.output(self.report(termination="budget_exhausted", reason="模型调用预算耗尽。"))
         if self.checkpointer is not None:
             await asyncio.to_thread(self.checkpointer.begin_call, state["turn"] + 1)
+        detail = None
         started, status, error, raw = monotonic(), "ok", None, None
         try:
             raw = await self.model.decide(self.domain.context())
@@ -80,12 +81,13 @@ class SerialGraphRun:
             raise
         except ModelFailure as exc:
             status, error = "error", exc.code
+            detail = exc.detail
         except Exception:
             status, error = "error", "adapter_error"
         finally:
             # 取消中的节点未返回图更新，但已经发生的调用仍进入部分报告。
             self.domain.session.usage.calls.append(CallUsage(kind="model", name="decide", status=status,
-                error_code=error, elapsed_ms=(monotonic() - started) * 1000,
+                error_code=error, failure_detail=detail, elapsed_ms=(monotonic() - started) * 1000,
                 **token_usage(getattr(self.model, "last_usage", None))))
         await asyncio.sleep(0)
         self.budget.check()

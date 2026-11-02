@@ -1,6 +1,7 @@
 """共享假设动作阶段；旧循环与图节点复用同一套业务校验。"""
 
 from dataclasses import dataclass
+from .diagnostics import validation_diagnostic
 from pydantic import ValidationError
 from .hypothesis_agent import HYPOTHESIS_ACTION, HypothesisFinish, HypothesisQuery, HypothesisReport, QueryTask
 from .hypotheses import HypothesisLedger, HypothesisUpdate
@@ -24,7 +25,7 @@ def prepare_action(state, raw, turn, budget=None):
         # 仅记录位置与错误类型，不保存供应商原文、input 或上下文值。
         result.validation_issues = [".".join(map(str, issue["loc"])) + ":" + issue["type"]
                                     for issue in exc.errors(include_input=False, include_context=False)][:24]
-        return result
+        return validation_diagnostic(result, "invalid_schema", exc)
     try:
         updates = [HypothesisUpdate(**h.model_dump(), expected_version=base_versions.get(h.id, 0)) for h in action.updates]
         candidate = state.ledger.propose(updates, session, turn)
@@ -42,7 +43,7 @@ def prepare_action(state, raw, turn, budget=None):
         if isinstance(action, HypothesisFinish):
             result.rejected_finding = action.finding.model_copy(deep=True)
         result.rejected_action = action.model_copy(deep=True)
-        return result
+        return validation_diagnostic(result, str(exc))
     if budget is not None:
         budget.check()
     if isinstance(action, HypothesisQuery):
@@ -73,7 +74,8 @@ def execute_query(state, prepared, budget=None):
         evidence = state.session.drilldown(prepared.action.trace_id)
     except ValueError as exc:
         task.error_code = str(exc)
-        return state.report(termination="source_error", reason="下钻失败，保留查询记录。")
+        return validation_diagnostic(state.report(termination="source_error", reason="下钻失败，保留查询记录。"),
+                                     str(exc), stage="tool")
     task.status, task.evidence_id, task.cost_tool_calls = "completed", evidence.id, 1
     if budget is not None:
         budget.check()

@@ -190,9 +190,12 @@ class ChatCompletionsModel:
     def _parse(body: bytes) -> dict:
         try:
             envelope = json.loads(body)
+        except (ValueError, RecursionError):
+            raise ModelFailure("invalid_response", detail="response_json_invalid") from None
+        try:
             choices = envelope["choices"]
             if not isinstance(choices, list) or len(choices) != 1:
-                raise ModelFailure("invalid_response")
+                raise ModelFailure("invalid_response", detail="response_shape_invalid")
             choice = choices[0]
             message = choice["message"]
             if message.get("refusal"):
@@ -200,14 +203,17 @@ class ChatCompletionsModel:
             if choice["finish_reason"] == "length":
                 raise ModelFailure("output_truncated")
             if choice["finish_reason"] != "stop" or message.get("tool_calls"):
-                raise ModelFailure("invalid_response")
+                raise ModelFailure("invalid_response", detail="response_finish_invalid")
             content = message["content"]
             if not isinstance(content, str):
-                raise ModelFailure("invalid_response")
+                raise ModelFailure("invalid_response", detail="action_content_invalid")
+        except (KeyError, TypeError, AttributeError):
+            raise ModelFailure("invalid_response", detail="response_shape_invalid") from None
+        try:
             action = json.loads(content)
-            if not isinstance(action, dict):
-                raise ModelFailure("invalid_response")
-            # 动作 Schema 与证据引用仍由执行器统一校验。
-            return action
-        except (ValueError, KeyError, TypeError, AttributeError, RecursionError):
-            raise ModelFailure("invalid_response") from None
+        except (ValueError, RecursionError):
+            raise ModelFailure("invalid_response", detail="action_json_invalid") from None
+        if not isinstance(action, dict):
+            raise ModelFailure("invalid_response", detail="action_not_object")
+        # 动作Schema与证据引用仍由执行器统一校验。
+        return action

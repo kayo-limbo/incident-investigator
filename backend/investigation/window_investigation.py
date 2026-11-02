@@ -14,6 +14,7 @@ from .models import Evidence, TraceQuery
 from .snapshot_store import SnapshotStore
 from .usage import CallUsage, Usage, token_usage
 from .window_queries import summarize
+from .diagnostics import FailureDiagnostic, diagnostic, validation_diagnostic
 
 Code = Literal["no_anomaly_observed", "inventory_latency", "pre_send_delay",
                "pool_contention", "inventory_latency_with_pool_contention", "insufficient_evidence"]
@@ -75,6 +76,7 @@ class RepeatedQueryDetected(Exception):
 
 
 class WindowReport(BaseModel):
+    diagnostic: FailureDiagnostic | None = None
     snapshot_id: str
     strategy: str
     finding: WindowFinding
@@ -236,7 +238,14 @@ class FrozenWindowSession:
         finding = finding.model_copy(deep=True)
         finding.limitations = list(dict.fromkeys(finding.limitations + LIMITATIONS))
         self.usage.elapsed_ms = (monotonic() - self.started) * 1000
-        return WindowReport(snapshot_id=self.snapshot_id, strategy=strategy, finding=finding,
+        failure = None
+        model_calls = [call for call in self.usage.calls if call.kind == "model"]
+        if termination == "model_error" and model_calls:
+            call = model_calls[-1]
+            failure = diagnostic(call.failure_detail or call.error_code, len(model_calls), stage="decide")
+        elif termination == "source_error":
+            failure = diagnostic("snapshot_unavailable", len(model_calls), stage="source")
+        return WindowReport(diagnostic=failure, snapshot_id=self.snapshot_id, strategy=strategy, finding=finding,
                             evidence=self.evidence, termination=termination,
                             usage=self.usage, usage_totals=self.usage.totals(),
                             repeat_query_policy=self.repeat_query_policy).model_copy(deep=True)
@@ -261,17 +270,19 @@ def _run_window_agent(session, model, max_tool_calls, strategy, budget):
         return session.report(strategy, termination="source_error", reason="快照无法读取或无效。")
     for _ in range(max_tool_calls):
         budget.check()
+        detail = None
         started, status, error_code = monotonic(), "ok", None
         try:
             raw = model.decide(session.context())
         except ModelFailure as exc:
             status, error_code = "error", exc.code
+            detail = exc.detail
         except Exception:
             status, error_code = "error", "adapter_error"
         finally:
             usage = token_usage(getattr(model, "last_usage", None))
             session.usage.calls.append(CallUsage(kind="model", name="decide", status=status,
-                elapsed_ms=(monotonic() - started) * 1000, error_code=error_code, **usage))
+                elapsed_ms=(monotonic() - started) * 1000, error_code=error_code, failure_detail=detail, **usage))
         budget.check()
         if status == "error":
             return session.report(strategy, termination="model_error", reason="模型调用失败，保留已有证据。")
@@ -293,8 +304,9 @@ def prepare_window_action(session, raw, strategy, budget):
     """验证动作与引用；不执行工具，不接纳迟到结论。"""
     try:
         action = WINDOW_ACTION.validate_python(raw)
-    except ValidationError:
-        return session.report(strategy, termination="invalid_action", reason="模型动作不符合窗口协议。")
+    except ValidationError as exc:
+        return validation_diagnostic(session.report(strategy, termination="invalid_action",
+            reason="模型动作不符合窗口协议。"), "invalid_schema", exc)
     if isinstance(action, Finish):
         try:
             session.validate_finding(action.finding)
@@ -302,13 +314,14 @@ def prepare_window_action(session, raw, strategy, budget):
             result = session.report(strategy, termination="invalid_finding", reason=f"结论校验失败：{exc}。")
             # 仅保存已通过 Schema 校验的候选，显式与接受的 finding 分离，便于复盘。
             result.rejected_finding = action.finding.model_copy(deep=True)
-            return result
+            return validation_diagnostic(result, str(exc))
         budget.check()
         return session.report(strategy, action.finding)
     if session.remaining <= 0:
         return session.report(strategy, termination="budget_exhausted", reason="工具调用预算耗尽。")
     if session._payload is None or action.trace_id not in session._payload["traces"]:
-        return session.report(strategy, termination="invalid_action", reason="请求不属于绑定快照。")
+        return validation_diagnostic(session.report(strategy, termination="invalid_action",
+            reason="请求不属于绑定快照。"), "trace_outside_snapshot")
     session.check_repeated_query(action.trace_id)
     budget.check()
     return action
@@ -322,5 +335,6 @@ def execute_window_action(session, action, strategy, budget):
     try:
         session.drilldown(action.trace_id)
     except ValueError:
-        return session.report(strategy, termination="invalid_action", reason="请求不属于绑定快照。")
+        return validation_diagnostic(session.report(strategy, termination="invalid_action",
+            reason="请求不属于绑定快照。"), "trace_outside_snapshot", stage="tool")
     budget.check()

@@ -11,11 +11,13 @@ from .tools import EvidenceTools
 class ModelFailure(Exception):
     """只允许固定错误码进入报告，禁止泄露供应商异常原文。"""
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, *, detail=None):
+        from .diagnostics import PARSE_DETAILS
         allowed = {"context_too_large", "authentication_failed", "rate_limited", "http_error",
                    "response_too_large", "timeout", "transport_error", "invalid_response",
                    "refused", "output_truncated"}
         self.code = code if code in allowed else "invalid_response"
+        self.detail = detail if self.code == "invalid_response" and detail in PARSE_DETAILS else None
         super().__init__(self.code)
 
 

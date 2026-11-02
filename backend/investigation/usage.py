@@ -29,6 +29,7 @@ class CallUsage(BaseModel):
     name: str
     status: str
     error_code: str | None = None
+    failure_detail: str | None = None
     elapsed_ms: float
     prompt_tokens: int | None = None
     completion_tokens: int | None = None

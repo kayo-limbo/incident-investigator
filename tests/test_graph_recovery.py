@@ -58,6 +58,9 @@ class Model:
     async def decide(self,context):
         self.calls+=1
         if mode=='inflight': os._exit(31)
+        if mode=='parse_error':
+            from backend.investigation.agent import ModelFailure
+            raise ModelFailure('invalid_response', detail='action_json_invalid')
         if self.calls==1:
             return dict(kind='tool',tool='get_snapshot_trace',trace_id='a'*32) if agent else query([update()])
         ref=dict(snapshot_id=t.request.snapshot_id,trace_id='a'*32,span_id='3',field='duration_ms')
@@ -77,7 +80,7 @@ os._exit(33)
 '''
         result = subprocess.run([sys.executable, "-c", script, self.store.schema, self.directory, mode],
                                 timeout=25, capture_output=True, text=True)
-        self.assertEqual(result.returncode, {"tool": 32, "inflight": 31, "finished": 33, "after_tool": 34}[mode], result.stderr)
+        self.assertEqual(result.returncode, {"tool": 32, "inflight": 31, "finished": 33, "after_tool": 34, "parse_error": 33}[mode], result.stderr)
         old = self.store.get(task.id)
         with self.store.connection() as conn:
             conn.execute("UPDATE investigation_tasks SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=%s",
@@ -236,3 +239,13 @@ class WindowGraphRecoveryTests(GraphRecoveryTests):
             conn.execute("UPDATE task_graph_runs SET request_hash=%s WHERE task_id=%s", ("0" * 64, task.id))
         with self.assertRaisesRegex(TaskConflict, "graph_protocol_or_request_mismatch"):
             saver.start()
+
+    def test_failure_diagnostic_survives_checkpoint_and_terminal_reconciliation(self):
+        self.crash("parse_error")
+        saved, calls = self.resume()
+        self.assertEqual(calls, 0)
+        self.assertEqual(saved.error_code, "model_error")
+        self.assertEqual(saved.result["diagnostic"], dict(stage="decide", category="model_response",
+                         code="action_json_invalid", turn=1, issue_types=[]))
+        self.assertEqual(saved.result["usage"]["calls"][-1]["failure_detail"], "action_json_invalid")
+        self.assertEqual(saved.result["usage_totals"]["total_tokens"], 3)
