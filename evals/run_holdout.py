@@ -61,19 +61,20 @@ def check_observations(case, summary):
         raise ValueError("scenario_not_observed")
 
 
-def collect(output, store):
+def collect(output, store, *, plan=PLAN, fingerprint_fn=None):
     if output.exists():
         raise ValueError("输出文件已存在，不能覆盖原始验收")
-    fingerprint = protocol_fingerprint()
+    fingerprint_fn = fingerprint_fn or protocol_fingerprint
+    fingerprint = fingerprint_fn()
     result = dict(recorded_at=datetime.now(timezone.utc).isoformat(), protocol=fingerprint,
-                  plan=list(PLAN), requests_per_case=18, cases=[], completed=False,
+                  plan=list(plan), requests_per_case=18, cases=[], completed=False,
                   recovery_verified=False, error=None)
     write(output, result)  # 修改环境前保存计划，失败也保留。
     orders = f"http://127.0.0.1:{os.getenv('ORDERS_PORT', '8000')}/orders/preview?sku=demo"
     jaeger = f"http://127.0.0.1:{os.getenv('JAEGER_PORT', '16686')}"
     tools = WindowEvidenceTools(store)
     try:
-        for spec in PLAN:
+        for spec in plan:
             case = dict(name=spec["name"], expected=spec["expected"], collected=False)
             result["cases"].append(case)
             compose("up", "-d", "--wait", "--wait-timeout", "60", delay=spec["delay"],
@@ -97,7 +98,7 @@ def collect(output, store):
             case.update(snapshot_id=evidence.data["snapshot_id"], collected=True)
             write(output, result)
             print(spec["name"] + ": collected", flush=True)
-        if fingerprint != protocol_fingerprint():
+        if fingerprint != fingerprint_fn():
             raise ValueError("protocol_changed_during_collection")
         result["completed"] = True
     except Exception as exc:
