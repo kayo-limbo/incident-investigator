@@ -4,19 +4,20 @@ from langgraph.graph import StateGraph, START, END
 
 from .graph_runtime import InvestigationGraphState, SerialGraphRun
 from .window_investigation import (
-    Drilldown, WindowReport, prepare_window_action, execute_window_action,
+    WINDOW_ACTION, Drilldown, WindowReport, prepare_window_action, execute_window_action,
 )
 
 
 class WindowGraphRun(SerialGraphRun):
     report_type = WindowReport
+    action_schema = WINDOW_ACTION
 
     async def validate(self, state):
         self.restore(state)
         self.budget.check()
         prepared = prepare_window_action(self.domain.session, state["raw"], self.domain.strategy, self.budget)
         if isinstance(prepared, WindowReport):
-            return self.output(prepared, raw=None, prepared=None)
+            return self.validation_output(prepared, state)
         return self.output(raw=None, prepared=prepared.model_dump(mode="json"))
 
     async def tool(self, state):
@@ -31,6 +32,10 @@ class WindowGraphRun(SerialGraphRun):
             graph.add_node(name, node)
         graph.add_edge(START, "decide")
         for source, target in (("decide", "validate"), ("validate", "tool"), ("tool", "decide")):
-            graph.add_conditional_edges(source, lambda state: "end" if state["report"] is not None else "next",
-                                        {"end": END, "next": target})
+            if source == "validate":
+                graph.add_conditional_edges(source, self.validation_route,
+                                            {"end": END, "next": target, "correct": "decide"})
+            else:
+                graph.add_conditional_edges(source, lambda state: "end" if state["report"] is not None else "next",
+                                            {"end": END, "next": target})
         return graph.compile(checkpointer=self.checkpointer)

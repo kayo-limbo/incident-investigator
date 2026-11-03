@@ -15,6 +15,7 @@ class GraphState(InvestigationGraphState):
 
 class HypothesisGraphRun(SerialGraphRun):
     report_type = HypothesisReport
+    action_schema = HYPOTHESIS_ACTION
     nodes_per_turn = 4
 
     def export(self):
@@ -32,7 +33,7 @@ class HypothesisGraphRun(SerialGraphRun):
         self.budget.check()
         prepared = prepare_action(self.domain, state["raw"], state["turn"], self.budget)
         if isinstance(prepared, HypothesisReport):
-            return self.output(prepared, raw=None, prepared=None)
+            return self.validation_output(prepared, state)
         data = {"action": prepared.action.model_dump(mode="json"),
                 "history": [h.model_dump(mode="json") for h in prepared.candidate.history],
                 "versions": prepared.versions, "turn": prepared.turn}
@@ -59,6 +60,10 @@ class HypothesisGraphRun(SerialGraphRun):
         graph.add_edge(START, "decide")
         for source, target in (("decide", "validate"), ("validate", "commit"),
                                ("commit", "tool"), ("tool", "decide")):
-            graph.add_conditional_edges(source, lambda state: "end" if state["report"] is not None else "next",
-                                        {"end": END, "next": target})
+            if source == "validate":
+                graph.add_conditional_edges(source, self.validation_route,
+                                            {"end": END, "next": target, "correct": "decide"})
+            else:
+                graph.add_conditional_edges(source, lambda state: "end" if state["report"] is not None else "next",
+                                            {"end": END, "next": target})
         return graph.compile(checkpointer=self.checkpointer)

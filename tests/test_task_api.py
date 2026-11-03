@@ -72,6 +72,19 @@ class TaskApiTests(unittest.TestCase):
             self.assertEqual(response.json(), {"error": {"code": code}})
         self.store.submit.assert_not_called()
 
+    def test_correction_limit_is_validated_and_forwarded(self):
+        for strategy in ("agent", "hypotheses"):
+            response = self.submit(snapshot_id="a" * 64, strategy=strategy, max_corrections=1)
+            self.assertEqual(response.status_code, 202)
+            request = self.store.submit.call_args.args[0]
+            self.assertEqual(request.max_corrections, 1)
+            self.assertEqual(request.strategy, strategy)
+        self.store.submit.reset_mock()
+        for strategy, limit in (("fixed", 1), ("agent", 2), ("hypotheses", True)):
+            response = self.submit(snapshot_id="a" * 64, strategy=strategy, max_corrections=limit)
+            self.assertEqual(response.status_code, 422)
+        self.store.submit.assert_not_called()
+
     def test_conflicts_and_database_failure_are_structured(self):
         for exc, status, code in [(TaskConflict("idempotency_key_conflict"), 409, "idempotency_key_conflict"),
                                   (psycopg.OperationalError("password=secret"), 503, "database_unavailable")]:

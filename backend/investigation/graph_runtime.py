@@ -9,6 +9,7 @@ from langsmith import tracing_context
 from langgraph.errors import NodeCancelledError
 
 from .agent import ModelFailure
+from .corrections import CorrectionFeedback, CorrectionStatus, RULES, feedback_for, validate_correction_limit
 from .budget import InvestigationDeadlineExceeded
 from .models import Evidence
 from .usage import Usage, CallUsage, token_usage
@@ -24,6 +25,9 @@ class InvestigationGraphState(TypedDict):
     raw: Any
     prepared: dict | None
     report: dict | None
+    corrections_used: int
+    correction_failures: list[dict]
+    pending_feedback: dict | None
 
 
 class SerialGraphRun:
@@ -31,28 +35,67 @@ class SerialGraphRun:
 
     nodes_per_turn = 3
 
-    def __init__(self, domain, model, budget, tokens, *, checkpointer=None, uncertain_turn=None):
+    def __init__(self, domain, model, budget, tokens, *, checkpointer=None, uncertain_turn=None, max_corrections=0):
         self.domain, self.model, self.budget, self.tokens = domain, model, budget, tokens
         self.checkpointer, self.uncertain_turn = checkpointer, uncertain_turn
+        self.max_corrections = validate_correction_limit(max_corrections)
+        self.corrections_used, self.correction_failures, self.pending_feedback = 0, [], None
+        self.schema_version = 2 if max_corrections else 1
 
     def export(self):
         return dict(evidence=[e.model_dump(mode="json") for e in self.domain.session.evidence],
-                    usage=self.domain.session.usage.model_dump(mode="json"))
+                    usage=self.domain.session.usage.model_dump(mode="json"),
+                    corrections_used=self.corrections_used,
+                    correction_failures=[f.model_dump(mode="json") for f in self.correction_failures],
+                    pending_feedback=self.pending_feedback.model_dump(mode="json") if self.pending_feedback else None)
 
     def restore(self, state):
-        if state["schema_version"] != 1 or state["snapshot_id"] != self.domain.session.snapshot_id:
+        if state["schema_version"] != self.schema_version or state["snapshot_id"] != self.domain.session.snapshot_id:
             raise ValueError("graph_state_binding_mismatch")
         self.domain.session.evidence = [Evidence.model_validate_json(json.dumps(e)) for e in state["evidence"]]
         self.domain.session.usage = Usage.model_validate(state["usage"])
+        self.corrections_used = state.get("corrections_used", 0)
+        self.correction_failures = [CorrectionFeedback.model_validate(f) for f in state.get("correction_failures", [])]
+        pending = state.get("pending_feedback")
+        self.pending_feedback = CorrectionFeedback.model_validate(pending) if pending else None
+        if not 0 <= self.corrections_used <= self.max_corrections:
+            raise ValueError("graph_correction_budget_mismatch")
 
     def report(self, **kwargs):
         result = self.domain.report(**kwargs)
+        return self.annotate(result)
+
+    def annotate(self, result):
         result.token_budget = self.tokens.snapshot(self.domain.session.usage)
+        if self.max_corrections:
+            result.correction = CorrectionStatus(limit=self.max_corrections, used=self.corrections_used,
+                failures=[f.model_copy(deep=True) for f in self.correction_failures])
         return result
+
+    def validation_output(self, result, state):
+        self.pending_feedback = None
+        if self.max_corrections and result.diagnostic is not None:
+            feedback = feedback_for(result, state["raw"], self.action_schema)
+            self.correction_failures.append(feedback)
+            self.budget.check()
+            if (result.diagnostic.category in RULES and result.diagnostic.stage == "validate"
+                    and self.corrections_used < self.max_corrections
+                    and state["turn"] < self.domain.session.max_tool_calls
+                    and self.token_stop() is None):
+                self.corrections_used += 1
+                self.pending_feedback = feedback
+                return self.output(raw=None, prepared=None)
+        return self.output(result, raw=None, prepared=None)
+
+    @staticmethod
+    def validation_route(state):
+        if state["report"] is not None:
+            return "end"
+        return "correct" if state.get("pending_feedback") else "next"
 
     def output(self, result=None, **updates):
         if result is not None:
-            result.token_budget = self.tokens.snapshot(self.domain.session.usage)
+            self.annotate(result)
         return {**self.export(), "report": result.model_dump(mode="json") if result else None, **updates}
 
     def token_stop(self):
@@ -75,7 +118,10 @@ class SerialGraphRun:
         detail = None
         started, status, error, raw = monotonic(), "ok", None, None
         try:
-            raw = await self.model.decide(self.domain.context())
+            context = self.domain.context()
+            if self.pending_feedback is not None:
+                context.correction_feedback = self.pending_feedback.model_copy(deep=True)
+            raw = await self.model.decide(context)
         except asyncio.CancelledError:
             status, error = "cancelled", "call_cancelled"
             raise
@@ -91,6 +137,7 @@ class SerialGraphRun:
                 **token_usage(getattr(self.model, "last_usage", None))))
         await asyncio.sleep(0)
         self.budget.check()
+        self.pending_feedback = None
         if status == "error":
             return self.output(self.report(termination="model_error", reason="模型调用失败，保留已有证据。"))
         stopped = self.token_stop()
@@ -120,7 +167,7 @@ class SerialGraphRun:
             async with asyncio.timeout(self.budget.remaining_seconds()):
                 if self.domain.session._payload is None:
                     return self.report(termination="source_error", reason="快照无法读取或无效。")
-                initial = {**self.export(), "schema_version": 1, "snapshot_id": self.domain.session.snapshot_id,
+                initial = {**self.export(), "schema_version": self.schema_version, "snapshot_id": self.domain.session.snapshot_id,
                            "turn": 0, "raw": None, "prepared": None, "report": None}
                 # 明确禁用框架远程追踪，避免继承环境变量后上传证据。
                 with tracing_context(enabled=False):

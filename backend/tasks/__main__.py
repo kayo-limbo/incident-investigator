@@ -34,6 +34,7 @@ def main(argv=None):
     submit.add_argument("snapshot_id")
     submit.add_argument("--idempotency-key", required=True)
     submit.add_argument("--strategy", choices=("fixed", "agent", "hypotheses"), default="fixed")
+    submit.add_argument("--max-corrections", type=int, choices=(0, 1), default=0)
     submit.add_argument("--max-tool-calls", type=int, default=6)
     submit.add_argument("--timeout-seconds", type=float, default=120)
     submit.add_argument("--max-total-tokens", type=int)

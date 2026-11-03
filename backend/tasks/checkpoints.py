@@ -17,6 +17,8 @@ class LeaseCheckpointSaver(BaseCheckpointSaver):
         super().__init__()
         self.store, self.task = store, task
         self.protocol = self.PROTOCOLS[task.request.strategy]
+        if task.request.max_corrections:
+            self.protocol = task.request.strategy + "-graph-correction-v1"
         self.config = {"configurable": {"thread_id": str(task.id), "checkpoint_ns": ""}}
 
     def validate_config(self, config):
@@ -138,4 +140,4 @@ async def execute_persistent(store, task, snapshots):
 
         return await runner(domain, LazyModel(), budget,
             ObservedTokenBudget(request.max_total_tokens), checkpointer=saver,
-            uncertain_turn=run_info["inflight_turn"]).run()
+            uncertain_turn=run_info["inflight_turn"], max_corrections=request.max_corrections).run()

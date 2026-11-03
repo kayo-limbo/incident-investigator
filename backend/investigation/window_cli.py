@@ -14,7 +14,7 @@ from .window_baseline import investigate_window_fixed
 
 
 async def run_async_agent(store, snapshot_id, config, max_tool_calls, timeout_seconds, *, strategy="agent",
-                          max_total_tokens=None, repeat_query_policy="stop"):
+                          max_total_tokens=None, repeat_query_policy="stop", max_corrections=0):
     """只在 CLI 边界将取消转成可落盘报告，库函数仍传播取消。"""
     adapters = {"agent": (AsyncWindowChatModel, investigate_window_async),
                 "hypotheses": (AsyncHypothesisChatModel, investigate_hypotheses_async)}
@@ -22,7 +22,8 @@ async def run_async_agent(store, snapshot_id, config, max_tool_calls, timeout_se
     try:
         async with adapter(config) as model:
             return await runner(store, snapshot_id, model, max_tool_calls, timeout_seconds=timeout_seconds,
-                                max_total_tokens=max_total_tokens, repeat_query_policy=repeat_query_policy)
+                                max_total_tokens=max_total_tokens, repeat_query_policy=repeat_query_policy,
+                                **({"max_corrections": max_corrections} if max_corrections else {}))
     except InvestigationCancelled as exc:
         return exc.report
 
@@ -42,6 +43,8 @@ def main():
     investigate.add_argument("snapshot_id")
     investigate.add_argument("--strategy", choices=("fixed", "agent", "hypotheses"), default="fixed")
     investigate.add_argument("--max-tool-calls", type=int, choices=range(1, 101), default=6)
+    investigate.add_argument("--max-corrections", type=int, choices=(0, 1), default=0,
+                             help="调查内协议纠错上限，默认0关闭；占用原模型调用与token预算")
     investigate.add_argument("--output", type=Path)
     investigate.add_argument("--timeout-seconds", type=float,
                              help="agent/hypotheses 调查总时限，默认120秒；到期取消异步模型等待")
@@ -50,6 +53,8 @@ def main():
     investigate.add_argument("--repeat-query-policy", choices=("stop", "allow"),
                              help="异步策略默认stop：重复下钻同一冻结Trace即停止；allow用于对照")
     args = parser.parse_args()
+    if args.command == "investigate" and args.max_corrections and args.strategy == "fixed":
+        parser.error("--max-corrections 仅支持 agent/hypotheses 策略")
     if args.command == "investigate" and args.repeat_query_policy is not None and args.strategy == "fixed":
         parser.error("--repeat-query-policy 仅支持 agent/hypotheses 策略")
     if args.command == "investigate" and args.max_total_tokens is not None:
@@ -84,7 +89,7 @@ def main():
                 tools.store, args.snapshot_id, config, args.max_tool_calls,
                 args.timeout_seconds if args.timeout_seconds is not None else 120,
                 strategy=args.strategy, max_total_tokens=args.max_total_tokens,
-                repeat_query_policy=args.repeat_query_policy or "stop"))
+                repeat_query_policy=args.repeat_query_policy or "stop", max_corrections=args.max_corrections))
         else:
             result = investigate_window_fixed(tools.store, args.snapshot_id, args.max_tool_calls)
         output = result.model_dump_json(indent=2)

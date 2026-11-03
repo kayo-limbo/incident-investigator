@@ -89,6 +89,9 @@ class TaskStore:
         validate_label(idempotency_key)
         request = TaskRequest.model_validate(request.model_dump())
         payload = request.model_dump(mode="json")
+        # Preserve pre-correction idempotency payload/hash for disabled requests.
+        if request.max_corrections == 0:
+            payload.pop("max_corrections")
         canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
         digest = hashlib.sha256(canonical.encode()).hexdigest()
         with self.connection() as conn:

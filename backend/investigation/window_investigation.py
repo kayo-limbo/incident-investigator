@@ -15,6 +15,7 @@ from .snapshot_store import SnapshotStore
 from .usage import CallUsage, Usage, token_usage
 from .window_queries import summarize
 from .diagnostics import FailureDiagnostic, diagnostic, validation_diagnostic
+from .corrections import CorrectionFeedback, CorrectionStatus
 
 Code = Literal["no_anomaly_observed", "inventory_latency", "pre_send_delay",
                "pool_contention", "inventory_latency_with_pool_contention", "insufficient_evidence"]
@@ -56,6 +57,7 @@ WINDOW_ACTION = TypeAdapter(Annotated[Drilldown | Finish, Field(discriminator="k
 
 
 class WindowContext(BaseModel):
+    correction_feedback: CorrectionFeedback | None = Field(default=None, exclude_if=lambda v: v is None)
     snapshot_id: str
     evidence: list[Evidence]
     remaining_tool_calls: int
@@ -76,6 +78,7 @@ class RepeatedQueryDetected(Exception):
 
 
 class WindowReport(BaseModel):
+    correction: CorrectionStatus | None = None
     diagnostic: FailureDiagnostic | None = None
     snapshot_id: str
     strategy: str

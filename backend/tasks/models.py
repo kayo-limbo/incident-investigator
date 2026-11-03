@@ -11,6 +11,7 @@ class TaskRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     snapshot_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     strategy: Literal["fixed", "agent", "hypotheses"] = "fixed"
+    max_corrections: int = Field(default=0, ge=0, le=1)
     max_tool_calls: int = Field(default=6, ge=1, le=100)
     timeout_seconds: float = Field(default=120, gt=0, le=3600, allow_inf_nan=False)
     max_total_tokens: int | None = Field(default=None, gt=0)
@@ -19,7 +20,7 @@ class TaskRequest(BaseModel):
     @model_validator(mode="after")
     def fixed_options(self):
         if self.strategy == "fixed" and (self.timeout_seconds != 120 or self.max_total_tokens is not None
-                                         or self.repeat_query_policy != "stop"):
+                                         or self.repeat_query_policy != "stop" or self.max_corrections != 0):
             raise ValueError("固定规则只支持max_tool_calls，不接受模型预算或重复策略配置")
         return self
 

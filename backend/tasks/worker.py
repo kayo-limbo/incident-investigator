@@ -30,7 +30,8 @@ async def execute(request, snapshots):
         return await runner(snapshots, request.snapshot_id, model, request.max_tool_calls,
                             timeout_seconds=request.timeout_seconds,
                             max_total_tokens=request.max_total_tokens,
-                            repeat_query_policy=request.repeat_query_policy)
+                            repeat_query_policy=request.repeat_query_policy,
+                            **({"max_corrections": request.max_corrections} if request.max_corrections else {}))
 
 
 async def execute_with_lease(store, task, snapshots, lease_seconds):

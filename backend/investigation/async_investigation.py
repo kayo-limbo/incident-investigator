@@ -4,6 +4,7 @@ import asyncio
 from time import monotonic
 
 from .agent import ModelFailure
+from .corrections import validate_correction_limit
 from .budget import InvestigationBudget, InvestigationDeadlineExceeded, ObservedTokenBudget
 from .usage import CallUsage, token_usage
 from .window_investigation import FrozenWindowSession, RepeatedQueryDetected, apply_window_action
@@ -17,13 +18,14 @@ class InvestigationCancelled(asyncio.CancelledError):
 
 
 async def investigate_window_async(store, snapshot_id, model, max_tool_calls=6, *,
-                                   timeout_seconds=120, max_total_tokens=None, repeat_query_policy="stop"):
+                                   timeout_seconds=120, max_total_tokens=None, repeat_query_policy="stop", max_corrections=0):
+    validate_correction_limit(max_corrections)
     budget = InvestigationBudget(timeout_seconds)
     from .window_graph import WindowGraphRun
     tokens = ObservedTokenBudget(max_total_tokens)
     session = FrozenWindowSession(store, snapshot_id, max_tool_calls, repeat_query_policy=repeat_query_policy)
     return await WindowGraphRun(WindowInvestigationState(session, "window_react_langgraph_v1"),
-                                model, budget, tokens).run()
+                                model, budget, tokens, max_corrections=max_corrections).run()
 
 
 async def investigate_window_legacy_async(store, snapshot_id, model, max_tool_calls=6, *,
@@ -36,13 +38,14 @@ async def investigate_window_legacy_async(store, snapshot_id, model, max_tool_ca
 
 
 async def investigate_hypotheses_async(store, snapshot_id, model, max_tool_calls=6, *,
-                                      timeout_seconds=120, max_total_tokens=None, repeat_query_policy="stop"):
+                                      timeout_seconds=120, max_total_tokens=None, repeat_query_policy="stop", max_corrections=0):
+    validate_correction_limit(max_corrections)
     budget = InvestigationBudget(timeout_seconds)
     from .hypothesis_graph import HypothesisGraphRun
     tokens = ObservedTokenBudget(max_total_tokens)
     session = FrozenWindowSession(store, snapshot_id, max_tool_calls, repeat_query_policy=repeat_query_policy)
     state = HypothesisInvestigationState(session, "window_hypotheses_langgraph_v1")
-    return await HypothesisGraphRun(state, model, budget, tokens).run()
+    return await HypothesisGraphRun(state, model, budget, tokens, max_corrections=max_corrections).run()
 
 
 async def investigate_hypotheses_legacy_async(store, snapshot_id, model, max_tool_calls=6, *,
