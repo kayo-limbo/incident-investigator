@@ -40,6 +40,9 @@ def reference_key(ref):
 class HypothesisLedger:
     """单调查内存账本；批量校验后一次替换，不是数据库并发控制。"""
 
+    revision_type = HypothesisRevision
+    reference_key = staticmethod(reference_key)
+
     def __init__(self):
         self._history = []
         self._current = {}
@@ -49,7 +52,7 @@ class HypothesisLedger:
         """重建受信任的图内状态；不作为外部检查点导入或语义验证接口。"""
         ledger = cls()
         for data in history:
-            revision = HypothesisRevision.model_validate(data).model_copy(deep=True)
+            revision = cls.revision_type.model_validate(data).model_copy(deep=True)
             previous = ledger._current.get(revision.id)
             expected = previous.version if previous else 0
             if revision.expected_version != expected or revision.version != expected + 1:
@@ -84,7 +87,7 @@ class HypothesisLedger:
                 raise ValueError("support_required")
             if update.status == "refuted" and not update.counter_refs:
                 raise ValueError("counter_evidence_required")
-            revision = HypothesisRevision(**update.model_dump(), version=update.expected_version + 1,
+            revision = self.revision_type(**update.model_dump(), version=update.expected_version + 1,
                                           turn=turn, evidence_count=len(session.evidence))
             candidate._current[update.id] = revision
             candidate._history.append(revision)
@@ -108,16 +111,16 @@ class HypothesisLedger:
             if hypothesis.status not in ("supported", "refuted"):
                 raise ValueError("claim_hypothesis_unresolved")
             supported |= hypothesis.status == "supported"
-            eligible.update(map(reference_key, hypothesis.supporting_refs + hypothesis.counter_refs))
+            eligible.update(map(self.reference_key, hypothesis.supporting_refs + hypothesis.counter_refs))
         if finding.code != "no_anomaly_observed" and not supported:
             raise ValueError("claim_support_required")
-        refs = set(map(reference_key, finding.references))
+        refs = set(map(self.reference_key, finding.references))
         if not refs <= eligible:
             raise ValueError("claim_reference_not_linked")
         # 每个入选解释都须出现在结论的具体字段引用中。
         for key in ids:
             h = self._current[key]
             used = h.supporting_refs if h.status == "supported" else h.counter_refs
-            if not refs.intersection(map(reference_key, used)):
+            if not refs.intersection(map(self.reference_key, used)):
                 raise ValueError("claim_hypothesis_not_cited")
         return versions

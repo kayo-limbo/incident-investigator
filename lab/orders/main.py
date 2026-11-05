@@ -10,12 +10,14 @@ from pydantic import BaseModel, Field, ValidationError
 from lab.observability import emit, install_request_logging
 from lab.tracing import get_inventory_with_trace, tracing_lifespan
 from lab.client_observation import ObservedTransport, client_settings
+from lab.orders.runtime_observation import initialize, install
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 一个进程复用一个客户端和连接池；服务关闭时自动释放连接。
     max_connections, pool_timeout_ms = client_settings()
+    initialize(app, max_connections, pool_timeout_ms)
     async with tracing_lifespan(app, "orders"), httpx.AsyncClient(
         base_url=os.getenv("INVENTORY_BASE_URL", "http://127.0.0.1:8001"),
         timeout=httpx.Timeout(2.0, pool=pool_timeout_ms / 1000),
@@ -28,6 +30,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Orders Service", lifespan=lifespan)
 install_request_logging(app, "orders")
+install(app)
 
 
 @app.get("/health")
