@@ -9,6 +9,8 @@ from pydantic import Field, TypeAdapter, ValidationError
 from .async_model import AsyncWindowChatModel
 from .budget import InvestigationBudget, ObservedTokenBudget
 from .bundle_evidence import BundleReference, BundleSession, SourceName, Strict
+from .bundle_diagnostics import RejectedCandidate, SchemaIssue, schema_issues, rejected_candidate
+from .diagnostics import diagnostic, validation_diagnostic
 from .graph_runtime import SerialGraphRun, InvestigationGraphState
 from .hypotheses import HypothesisState, HypothesisLedger
 from .window_investigation import WindowFinding, WindowReport
@@ -70,6 +72,9 @@ class BundleReport(WindowReport):
     query_tasks: list[dict] = Field(default_factory=list)
     claim_hypothesis_versions: dict[str, int] = Field(default_factory=dict)
     validation_error: str | None = None
+    schema_issues: list[SchemaIssue] = Field(default_factory=list, max_length=24)
+    schema_issues_truncated: bool = False
+    rejected_candidate: RejectedCandidate | None = None
 
 
 class BundleContext(Strict):
@@ -112,7 +117,14 @@ class BundleDomain:
         finding = finding.model_copy(deep=True)
         finding.limitations = list(dict.fromkeys(finding.limitations + LIMITATIONS))
         self.session.usage.elapsed_ms = (monotonic() - self.session.started) * 1000
+        failure = None
+        calls = [call for call in self.session.usage.calls if call.kind == "model"]
+        if termination == "model_error" and calls:
+            failure = diagnostic(calls[-1].failure_detail or calls[-1].error_code, len(calls), stage="decide")
+        elif termination == "source_error":
+            failure = diagnostic("snapshot_unavailable", len(calls), stage="source")
         return BundleReport(snapshot_id=self.session.snapshot_id, strategy=self.strategy,
+            diagnostic=failure,
             finding=finding, termination=termination, usage=self.session.usage,
             usage_totals=self.session.usage.totals(), evidence=self.session.evidence,
             hypothesis_history=self.ledger.history, query_tasks=self.tasks, **kwargs).model_copy(deep=True)
@@ -145,8 +157,12 @@ class BundleGraphRun(SerialGraphRun):
         self.budget.check()
         try:
             action = self.action_schema.validate_python(state["raw"])
-        except ValidationError:
-            return self.output(self.report(termination="invalid_action", validation_error="invalid_schema"), raw=None)
+        except ValidationError as exc:
+            issues, truncated = schema_issues(exc, self.action_schema)
+            result = self.report(termination="invalid_action", validation_error="invalid_schema",
+                schema_issues=issues, schema_issues_truncated=truncated,
+                rejected_candidate=RejectedCandidate(status="schema_invalid"))
+            return self.output(validation_diagnostic(result, "invalid_schema", exc), raw=None)
         try:
             candidate, versions = self.domain.ledger, {}
             if self.hypotheses:
@@ -165,7 +181,13 @@ class BundleGraphRun(SerialGraphRun):
             code = str(exc)
             termination = code if code in ("budget_exhausted", "repeated_query") else (
                 "invalid_finding" if isinstance(action, Finish) else "invalid_action")
-            return self.output(self.report(termination=termination, validation_error=code), raw=None)
+            rejected = rejected_candidate(action)
+            result = self.report(termination=termination, validation_error=code,
+                rejected_candidate=rejected,
+                rejected_finding=action.finding if isinstance(action, Finish) and rejected.status == "stored" else None)
+            if termination in ("invalid_action", "invalid_finding"):
+                validation_diagnostic(result, code)
+            return self.output(result, raw=None)
         self.budget.check()
         if isinstance(action, Finish):
             self.domain.ledger = candidate
