@@ -1,6 +1,6 @@
 """Process-local request counters; diagnostic observations, never injection settings."""
 
-from time import time_ns
+from time import monotonic_ns, time_ns
 from uuid import uuid4
 
 
@@ -30,3 +30,9 @@ def install(app):
     @app.get("/observations/client")
     async def observation():
         return {**app.state.runtime_observation, "observed_us": time_ns() // 1000}
+
+    @app.get("/observations/client/timed")
+    async def timed_observation():
+        # Separate endpoint preserves the strict legacy observation contract.
+        return {**app.state.runtime_observation, "observed_us": time_ns() // 1000,
+                "monotonic_us": monotonic_ns() // 1000}

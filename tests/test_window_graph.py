@@ -41,8 +41,7 @@ class WindowGraphTests(unittest.IsolatedAsyncioTestCase):
                  ([self.tool], {"max_total_tokens": 10}, self.key, None),
                  ([self.tool], {"max_total_tokens": 3}, self.key,
                   {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3}),
-                 ([], {}, "b" * 64, None),
-                 ([], {"timeout_seconds": 1e-12}, self.key, None)]
+                 ([], {}, "b" * 64, None)]
         for actions, options, key, usage in cases:
             with self.subTest(actions=actions, options=options, key=key):
                 reports = []
@@ -52,6 +51,19 @@ class WindowGraphTests(unittest.IsolatedAsyncioTestCase):
                     reports.append(await runner(self.store, key, model, **options))
                 self.assertEqual(normalized(reports[0]), normalized(reports[1]))
                 self.assertNotIn("not-in-report", reports[0].model_dump_json())
+
+    async def test_expired_budget_matches_legacy_without_clock_resolution_assumption(self):
+        reports = []
+        for runner in (investigate_window_async, investigate_window_legacy_async):
+            now = [0.0]
+            budget = InvestigationBudget(1, clock=lambda: now[0])
+            now[0] = 2.0
+            with patch("backend.investigation.async_investigation.InvestigationBudget", return_value=budget):
+                reports.append(await runner(self.store, self.key, AsyncScripted(), timeout_seconds=1))
+        self.assertEqual(normalized(reports[0]), normalized(reports[1]))
+        for report in reports:
+            self.assertEqual(report.termination, "deadline_exceeded")
+            self.assertEqual(report.usage_totals["model_calls"], 0)
 
     async def test_distinct_nodes_exchange_json_without_hypothesis_state(self):
         seen = []
