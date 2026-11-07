@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from backend.investigation.paired_evidence import (
-    PairedBundle, PairedReference, PairedSession, TimedRuntime, mask_sources,
+    ArrivalRuntime, PAIRED_BUNDLE, PairedBundle, PairedReference, PairedSession, TimedRuntime, mask_sources,
 )
 from backend.investigation.snapshot_store import SnapshotStore
 
@@ -28,6 +28,47 @@ def payload():
 
 
 class PairedEvidenceTests(unittest.TestCase):
+    def test_arrival_rate_excludes_drain_and_keeps_completion_checks(self):
+        before, cutoff, after = reading(100), reading(1_000_100, 10), reading(1_200_100, 10)
+        cutoff.update(requests_finished=5, in_flight=5, peak_in_flight=5)
+        after["peak_in_flight"] = 5
+        runtime = ArrivalRuntime(before=before, send_end=cutoff, after=after)
+        self.assertEqual(runtime.request_rate(), 10.)
+        self.assertAlmostEqual(runtime.drained_interval_rate(), 10 / 1.2)
+        for change in (lambda r: r["send_end"].update(process_id="e" * 32),
+                       lambda r: r["send_end"].update(max_connections=1),
+                       lambda r: r["send_end"].update(monotonic_us=1),
+                       lambda r: r["after"].update(requests_started=11, requests_finished=11),
+                       lambda r: r["send_end"].update(requests_finished=11)):
+            value = runtime.model_dump()
+            change(value)
+            with self.assertRaises(ValueError):
+                ArrivalRuntime.model_validate(value)
+
+    def test_versioned_runtime_never_invents_old_cutoff_and_preserves_masks(self):
+        old = payload()
+        self.assertIsInstance(PAIRED_BUNDLE.validate_python(old).reference.runtime, TimedRuntime)
+        new = copy.deepcopy(old)
+        new.update(schema_version=4, projection_version="paired-bundle-v2")
+        with self.assertRaises(ValueError):
+            PAIRED_BUNDLE.validate_python(new)
+        for name in ("reference", "incident"):
+            r = new[name]["runtime"]
+            r["send_end"] = {**r["after"], "observed_us": r["after"]["observed_us"] - 1,
+                             "monotonic_us": r["after"]["monotonic_us"] - 1}
+        self.assertIsInstance(PAIRED_BUNDLE.validate_python(new).reference.runtime, ArrivalRuntime)
+        self.assertEqual(mask_sources(new, runtime=False)["projection_version"], "paired-bundle-v2")
+        old["reference"]["runtime"]["send_end"] = new["reference"]["runtime"]["send_end"]
+        with self.assertRaises(ValueError):
+            PAIRED_BUNDLE.validate_python(old)
+        with tempfile.TemporaryDirectory() as directory:
+            store = SnapshotStore(Path(directory))
+            key = store.freeze(new)
+            session = PairedSession(store, key)
+            session.query("reference", "runtime")
+            ref = PairedReference(snapshot_id=key, window="reference", source="runtime", field="send_end.requests_started")
+            self.assertEqual(session.resolve(ref), 10)
+
     def test_samples_are_not_population_and_projection_rejects_truth(self):
         value = payload()
         self.assertEqual(value["alert"]["request_count"], 10)

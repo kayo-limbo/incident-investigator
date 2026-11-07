@@ -1,5 +1,7 @@
 # 双窗口订单开发场景
 
+后续协议更新：已增加发送结束读数，使用schema 4 / paired-bundle-v2分别计算发送区间速率与含排空区间速率。新版本契约与复验见 [入口速率截止读数](../decisions/031-arrival-cutoff.md)。下文的schema 3和旧轮次结果保留历史含义，不用新算法改写。
+
 2026-11-07。实现 [任务设计030](../decisions/030-cross-source-investigation-tasks.md) 的首个采集里程碑：双窗口冻结、只读查询、来源消融、有界开环驱动与离线重建。没有接入模型策略、Worker或多Agent；这些开发场景不构成独立测试集。
 
 ## 实现与使用

@@ -1,9 +1,9 @@
 """Strict paired-window observations and offline tools; no experiment controls."""
 
 import copy
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, TypeAdapter, model_validator
 
 from .bundle_evidence import RuntimeReading, RuntimeWindow, Strict, TraceWindow, scalar_fields
 from .models import Evidence
@@ -106,14 +106,51 @@ class PairedReference(Strict):
     field: str = Field(min_length=1, max_length=200)
 
 
+class ArrivalRuntime(TimedRuntime):
+    """v2: arrivals measured before drain, completion still checked after drain."""
+    send_end: TimedReading
+
+    @model_validator(mode="after")
+    def cutoff(self):
+        for a, b in ((self.before, self.send_end), (self.send_end, self.after)):
+            RuntimeWindow(before=a, after=b)
+            elapsed = b.monotonic_us - a.monotonic_us
+            if elapsed <= 0 or abs(b.observed_us - a.observed_us - elapsed) > 100_000:
+                raise ValueError("cutoff_clock_discontinuity")
+        if self.send_end.requests_started != self.after.requests_started:
+            raise ValueError("arrivals_after_send_end")
+        return self
+
+    def request_rate(self):
+        return ((self.send_end.requests_started - self.before.requests_started) * 1_000_000 /
+                (self.send_end.monotonic_us - self.before.monotonic_us))
+
+    def drained_interval_rate(self):
+        return super().request_rate()
+
+
+class PairedWindowV2(PairedWindow):
+    runtime: ArrivalRuntime | None
+
+
+class PairedBundleV2(PairedBundle):
+    schema_version: Literal[4] = 4
+    projection_version: Literal["paired-bundle-v2"] = "paired-bundle-v2"
+    reference: PairedWindowV2
+    incident: PairedWindowV2
+
+
+PAIRED_BUNDLE = TypeAdapter(Annotated[PairedBundle | PairedBundleV2, Field(discriminator="projection_version")])
+
+
 def mask_sources(payload, *, trace=True, runtime=True):
-    result = PairedBundle.model_validate(payload).model_dump(mode="json")
+    result = PAIRED_BUNDLE.validate_python(payload).model_dump(mode="json")
     for window in ("reference", "incident"):
         if not trace:
             result[window]["trace"].update(quality="unavailable", requests=[])
         if not runtime:
             result[window]["runtime"] = None
-    return PairedBundle.model_validate(result).model_dump(mode="json")
+    return PAIRED_BUNDLE.validate_python(result).model_dump(mode="json")
 
 
 class PairedSession:
@@ -121,7 +158,7 @@ class PairedSession:
         if type(max_tool_calls) is not int or not 1 <= max_tool_calls <= 100:
             raise ValueError("invalid_tool_budget")
         self.snapshot_id, self.max_tool_calls = snapshot_id, max_tool_calls
-        self._payload = PairedBundle.model_validate(store.read(snapshot_id)).model_dump(mode="json")
+        self._payload = PAIRED_BUNDLE.validate_python(store.read(snapshot_id)).model_dump(mode="json")
         self.usage, self.evidence, self._seen = Usage(), [], set()
         self._record("get_alert", {}, dict(alert=self._payload["alert"], windows={
             w: dict(start_us=self._payload[w]["start_us"], end_us=self._payload[w]["end_us"],

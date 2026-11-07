@@ -30,13 +30,56 @@ def raw_window():
     # Independent raw observation validator requires the transport measurement.
     trace["spans"][1]["tags"] += [dict(key="client.transport_ms", value=90.),
                                      dict(key="client.in_flight_at_start", value=1)]
-    return dict(before=reading(100), after=reading(1_000_200, 1), raw_traces=[trace], load=dict(
+    return dict(before=reading(100), send_end=reading(1_000_150, 1), after=reading(1_000_200, 1), raw_traces=[trace], load=dict(
         start_us=101, end_us=1_000_100, samples=[dict(index=0, trace_id="a" * 32,
             sent_us=150, status=200, business_ok=True, client_ms=100., error=None, lag_seconds=0.)],
-        errors=[], scheduled=1, max_lag_seconds=0., send_seconds=1., drain_seconds=0.))
+        errors=[], scheduled=1, max_lag_seconds=0., send_seconds=1., drain_seconds=0., send_end_delay_seconds=.00005))
 
 
 class PairedCollectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cutoff_observes_pending_requests_before_drain(self):
+        release = asyncio.Event()
+        active = 0
+        async def handler(request):
+            nonlocal active
+            active += 1
+            try:
+                await release.wait()
+                await asyncio.sleep(.05)
+                return httpx.Response(200, json={"sku": "demo", "can_order": True})
+            finally:
+                active -= 1
+        async def capture():
+            result = {"in_flight": active}
+            release.set()
+            return result
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            result = await open_loop(client, "http://test", 5, .2,
+                {**LIMITS, "max_tail_fraction": 1.}, on_send_end=capture)
+        self.assertEqual(result["send_end_reading"], {"in_flight": 1})
+        self.assertEqual(active, 0)
+        self.assertEqual(result["errors"], [])
+
+    async def test_failed_cutoff_is_bounded_and_does_not_become_drained_reading(self):
+        async def capture():
+            await asyncio.Event().wait()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request:
+                httpx.Response(200, json={"sku": "demo", "can_order": True}))) as client:
+            result = await open_loop(client, "http://test", 10, .1,
+                {**LIMITS, "max_send_end_delay_seconds": .02, "max_tail_fraction": 1.}, on_send_end=capture)
+        self.assertIsNone(result["send_end_reading"])
+        self.assertIn("send_end_observation_failed:TimeoutError", result["errors"])
+
+    def test_missing_delayed_or_late_arrival_cutoff_is_rejected(self):
+        for change in (lambda r: r.update(send_end=None),
+                       lambda r: r["load"].update(send_end_delay_seconds=.2),
+                       lambda r: r["send_end"].update(requests_started=0, requests_finished=0),
+                       lambda r: r["send_end"].update(observed_us=1_150_100, monotonic_us=1_150_200)):
+            raw = raw_window()
+            change(raw)
+            with self.assertRaises(ValueError):
+                rebuild_window(raw, LIMITS)
+
     def test_atomic_write_retries_temporary_lock_without_truncating_target(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "result.private.json"
@@ -204,6 +247,7 @@ class PairedCollectionTests(unittest.IsolatedAsyncioTestCase):
             raw = raw_window()
             raw["before"] = reading(100 + offset, 0 if offset == 0 else 10)
             raw["after"] = reading(1_000_200 + offset, 10 if offset == 0 else 20)
+            raw["send_end"] = reading(1_000_150 + offset, 10 if offset == 0 else 20)
             raw["load"].update(start_us=101 + offset, end_us=1_000_100 + offset, scheduled=10)
             sample, trace = raw["load"]["samples"][0], raw["raw_traces"][0]
             raw["load"]["samples"], raw["raw_traces"] = [], []
@@ -232,6 +276,7 @@ class PairedCollectionTests(unittest.IsolatedAsyncioTestCase):
             path = target / "collection.private.json"
             original = path.read_bytes()
             for change in (lambda r: r["cases"][0]["observations"]["incident"].update(rate=999),
+                           lambda r: r["cases"][0]["windows"]["incident"]["send_end"].update(requests_started=9),
                            lambda r: r["cases"][0]["feasibility"].update(ready=False),
                            lambda r: r["cases"][0]["windows"]["incident"]["load"].update(scheduled=9),
                            lambda r: r["recovery"].update(status=503),

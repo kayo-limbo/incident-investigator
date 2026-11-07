@@ -13,7 +13,9 @@ from pathlib import Path
 import httpx
 
 from backend.investigation.evidence_models import WindowQuery
-from backend.investigation.paired_evidence import PairedBundle, PairedWindow, TimedReading, mask_sources
+from backend.investigation.paired_evidence import (
+    PairedBundleV2 as PairedBundle, PairedWindowV2 as PairedWindow, TimedReading, mask_sources,
+)
 from backend.investigation.snapshot_store import SnapshotStore
 from backend.investigation.window_investigation import trace_index
 from backend.investigation.window_queries import project_window
@@ -31,7 +33,8 @@ CASES = {
 }
 LIMITS = dict(max_requests=1000, max_in_flight=100, request_timeout=5.0,
               drain_timeout=10.0, max_lag_seconds=.1, max_tail_fraction=.2,
-              max_interval_overhead_fraction=.25, trace_sample_size=40)
+              max_interval_overhead_fraction=.25, trace_sample_size=40,
+              max_send_end_delay_seconds=.1)
 
 
 def write(path, value):
@@ -56,7 +59,7 @@ def sources():
     return {p.relative_to(ROOT).as_posix(): p.read_bytes() for p in paths}
 
 
-async def open_loop(client, url, rate, duration, limits):
+async def open_loop(client, url, rate, duration, limits, *, on_send_end=None):
     if (type(rate) is not int or not 1 <= rate <= 100 or not math.isfinite(duration) or
             not 0 < duration <= 60 or not 1 <= math.ceil(rate * duration) <= limits["max_requests"]):
         raise ValueError("invalid_load_budget")
@@ -68,7 +71,8 @@ async def open_loop(client, url, rate, duration, limits):
 
     started = time.perf_counter()
     result = dict(start_us=time.time_ns() // 1000, samples=[], errors=[], scheduled=math.ceil(rate * duration),
-                  max_lag_seconds=0.0, send_seconds=duration, drain_seconds=0.0)
+                  max_lag_seconds=0.0, send_seconds=duration, drain_seconds=0.0,
+                  send_end_reading=None, send_end_delay_seconds=None)
     tasks = []
     active = set()
 
@@ -108,6 +112,15 @@ async def open_loop(client, url, rate, duration, limits):
             active.add(task)
             task.add_done_callback(active.discard)
         await sleep_until(started + duration)
+        if on_send_end is not None:
+            try:
+                async with asyncio.timeout(limits["max_send_end_delay_seconds"]):
+                    result["send_end_reading"] = await on_send_end()
+            except Exception as exc:
+                result["errors"].append("send_end_observation_failed:" + type(exc).__name__)
+            result["send_end_delay_seconds"] = time.perf_counter() - started - duration
+            if result["send_end_delay_seconds"] > limits["max_send_end_delay_seconds"]:
+                result["errors"].append("send_end_observation_late")
         if tasks:
             _, pending = await asyncio.wait(tasks, timeout=limits["drain_timeout"])
             if pending:
@@ -130,7 +143,8 @@ async def open_loop(client, url, rate, duration, limits):
 async def drive(base, rate, duration, limits):
     async with httpx.AsyncClient(timeout=limits["request_timeout"], trust_env=False,
             limits=httpx.Limits(max_connections=limits["max_in_flight"],
-                               max_keepalive_connections=limits["max_in_flight"])) as client:
+                               max_keepalive_connections=limits["max_in_flight"])) as client, \
+            httpx.AsyncClient(timeout=1, trust_env=False) as observer:
         url = base + "/orders/preview?sku=demo"
         # Same fixed warmup for every window, excluded from runtime and business counts.
         for _ in range(3):
@@ -141,11 +155,16 @@ async def drive(base, rate, duration, limits):
         response = await client.get(base + "/observations/client/timed")
         response.raise_for_status()
         before = TimedReading.model_validate(response.json()).model_dump()
-        load = await open_loop(client, url, rate, duration, limits)
+        # A separate client avoids placing the observation behind queued load requests.
+        async def capture_send_end():
+            response = await observer.get(base + "/observations/client/timed")
+            response.raise_for_status()
+            return TimedReading.model_validate(response.json()).model_dump()
+        load = await open_loop(client, url, rate, duration, limits, on_send_end=capture_send_end)
         response = await client.get(base + "/observations/client/timed")
         response.raise_for_status()
         after = TimedReading.model_validate(response.json()).model_dump()
-    return dict(before=before, after=after, load=load, raw_traces=[])
+    return dict(before=before, send_end=load.pop("send_end_reading"), after=after, load=load, raw_traces=[])
 
 
 def selected(samples, size):
@@ -159,11 +178,18 @@ def business_summary(samples):
 
 def rebuild_window(raw, limits):
     load, before, after = raw["load"], raw["before"], raw["after"]
+    send_end = raw["send_end"]
     samples = load["samples"]
     if (load["errors"] or len(samples) != load["scheduled"] or
             load["max_lag_seconds"] > limits["max_lag_seconds"] or
             load["drain_seconds"] > load["send_seconds"] * limits["max_tail_fraction"]):
         raise ValueError("invalid_driver_window")
+    if (send_end is None or load["send_end_delay_seconds"] is None or
+            not 0 <= load["send_end_delay_seconds"] <= limits["max_send_end_delay_seconds"]):
+        raise ValueError("invalid_send_end_observation")
+    sending_elapsed = (send_end["monotonic_us"] - before["monotonic_us"]) / 1_000_000
+    if not load["send_seconds"] <= sending_elapsed <= load["send_seconds"] + limits["max_send_end_delay_seconds"]:
+        raise ValueError("send_interval_overhead")
     if (not samples or len(samples) > limits["max_requests"] or
             [s["index"] for s in samples] != list(range(len(samples))) or
             any(s["error"] or s["status"] not in (200, 503) or not s["trace_id"] or
@@ -195,7 +221,7 @@ def rebuild_window(raw, limits):
         if row["max_connections"] != after["max_connections"] or row["pool_timeout_ms"] != after["pool_timeout_ms"]:
             raise ValueError("trace_runtime_config_mismatch")
     return PairedWindow.model_validate(dict(start_us=start_us, end_us=end_us,
-        runtime=dict(before=before, after=after), trace=dict(start_us=start_us, end_us=end_us,
+        runtime=dict(before=before, send_end=send_end, after=after), trace=dict(start_us=start_us, end_us=end_us,
         quality="observed", coverage="sampled", requests=rows)))
 
 
@@ -210,6 +236,8 @@ def describe(bundle):
     for name in ("reference", "incident"):
         window = getattr(bundle, name)
         result[name] = dict(rate=window.runtime.request_rate(), pool=window.runtime.after.max_connections,
+            drained_interval_rate=window.runtime.drained_interval_rate(),
+            send_end_in_flight=window.runtime.send_end.in_flight,
             process_id=window.runtime.after.process_id, sample_size=len(window.trace.requests),
             **{k + "_p95": percentile([getattr(r, k) for r in window.trace.requests if getattr(r, k) is not None], .95)
                for k in ("orders_ms", "inventory_ms", "pre_send_ms")})
@@ -274,7 +302,7 @@ def collect(directory, *, names=None, repeats=2, duration=15.0):
         raise ValueError("invalid_collection_plan")
     directory.mkdir(parents=True, exist_ok=False)
     source = sources()
-    plan = dict(protocol="paired-development-v1", split="development", duration=duration, repeats=repeats,
+    plan = dict(protocol="paired-development-v2", split="development", duration=duration, repeats=repeats,
                 cases={n: CASES[n] for n in names}, limits=LIMITS,
                 source_hashes={p: hashlib.sha256(b).hexdigest() for p, b in source.items()})
     write(directory / "plan.private.json", plan)
@@ -342,7 +370,7 @@ def audit(directory):
     result = json.loads((directory / "collection.private.json").read_text(encoding="utf-8"))
     if plan["source_hashes"] != {p: hashlib.sha256(b).hexdigest() for p, b in sources().items()}:
         raise ValueError("frozen_protocol_changed")
-    if (plan["protocol"] != "paired-development-v1" or plan["split"] != "development" or
+    if (plan["protocol"] != "paired-development-v2" or plan["split"] != "development" or
             plan["limits"] != LIMITS or not 1 <= plan["repeats"] <= 3 or
             not 1 <= plan["duration"] <= 30 or not plan["cases"] or
             any(n not in CASES or specs != [list(s) for s in CASES[n]] for n, specs in plan["cases"].items())):
