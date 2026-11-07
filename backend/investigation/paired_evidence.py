@@ -177,13 +177,16 @@ class PairedSession:
         self.usage.calls.append(CallUsage(kind="tool", name=tool, status="ok", elapsed_ms=0))
         return evidence.model_copy(deep=True)
 
-    def query(self, window, source):
+    def check_query(self, window, source):
         if self.remaining <= 0:
             raise ValueError("budget_exhausted")
         if window not in ("reference", "incident") or source not in ("trace", "runtime"):
             raise ValueError("source_outside_bundle")
-        if (window, source) in self._seen:
+        if any(e.tool == source and e.parameters.get("window") == window for e in self.evidence):
             raise ValueError("repeated_query")
+
+    def query(self, window, source):
+        self.check_query(window, source)
         data = copy.deepcopy(self._payload[window][source])
         data = data if data is not None else {"quality": "unavailable"}
         data["reference_fields"] = list(scalar_fields(data))

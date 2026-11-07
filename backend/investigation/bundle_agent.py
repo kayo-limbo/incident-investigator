@@ -92,15 +92,18 @@ LIMITATIONS = ["仅描述已采集请求；不保证全量覆盖。",
 
 
 class BundleDomain:
+    ledger_type, hypothesis_type = BundleLedger, BundleHypothesis
+    context_type, finding_type, report_type = BundleContext, BundleFinding, BundleReport
+
     def __init__(self, session, strategy):
         self.session, self.strategy = session, strategy
-        self.ledger, self.tasks = BundleLedger(), []
+        self.ledger, self.tasks = self.ledger_type(), []
 
     def context(self):
-        return BundleContext(snapshot_id=self.session.snapshot_id,
+        return self.context_type(snapshot_id=self.session.snapshot_id,
             evidence=[e.model_dump(mode="json") for e in self.session.evidence],
             remaining_tool_calls=self.session.remaining,
-            hypotheses=[BundleHypothesis(**h.model_dump(include=set(BundleHypothesis.model_fields)))
+            hypotheses=[self.hypothesis_type(**h.model_dump(include=set(self.hypothesis_type.model_fields)))
                         for h in self.ledger.current.values()], query_tasks=self.tasks).model_copy(deep=True)
 
     def validate_finding(self, finding):
@@ -113,7 +116,7 @@ class BundleDomain:
 
     def report(self, finding=None, termination="completed", reason="证据不足", **kwargs):
         if finding is None:
-            finding = BundleFinding(code="insufficient_evidence", summary=reason, references=[], limitations=[])
+            finding = self.finding_type(code="insufficient_evidence", summary=reason, references=[], limitations=[])
         finding = finding.model_copy(deep=True)
         finding.limitations = list(dict.fromkeys(finding.limitations + LIMITATIONS))
         self.session.usage.elapsed_ms = (monotonic() - self.session.started) * 1000
@@ -123,7 +126,7 @@ class BundleDomain:
             failure = diagnostic(calls[-1].failure_detail or calls[-1].error_code, len(calls), stage="decide")
         elif termination == "source_error":
             failure = diagnostic("snapshot_unavailable", len(calls), stage="source")
-        return BundleReport(snapshot_id=self.session.snapshot_id, strategy=self.strategy,
+        return self.report_type(snapshot_id=self.session.snapshot_id, strategy=self.strategy,
             diagnostic=failure,
             finding=finding, termination=termination, usage=self.session.usage,
             usage_totals=self.session.usage.totals(), evidence=self.session.evidence,
@@ -137,6 +140,7 @@ class BundleGraphState(InvestigationGraphState):
 
 class BundleGraphRun(SerialGraphRun):
     report_type = BundleReport
+    ledger_type, update_type, finish_type = BundleLedger, BundleUpdate, Finish
 
     def __init__(self, *args, hypotheses=False, **kwargs):
         super().__init__(*args, **kwargs)
@@ -149,7 +153,7 @@ class BundleGraphRun(SerialGraphRun):
 
     def restore(self, state):
         super().restore(state)
-        self.domain.ledger = BundleLedger.from_history(state["history"])
+        self.domain.ledger = self.ledger_type.from_history(state["history"])
         self.domain.tasks = [dict(q) for q in state["queries"]]
 
     async def validate(self, state):
@@ -167,29 +171,29 @@ class BundleGraphRun(SerialGraphRun):
             candidate, versions = self.domain.ledger, {}
             if self.hypotheses:
                 current = candidate.current
-                updates = [BundleUpdate(**h.model_dump(), expected_version=current[h.id].version if h.id in current else 0)
+                updates = [self.update_type(**h.model_dump(), expected_version=current[h.id].version if h.id in current else 0)
                            for h in action.updates]
                 candidate = candidate.propose(updates, self.domain.session, state["turn"])
                 versions = candidate.versions(action.hypothesis_ids)
-            if isinstance(action, Finish):
+            if isinstance(action, self.finish_type):
                 self.domain.validate_finding(action.finding)
                 if self.hypotheses:
                     versions = candidate.validate_claim(action.finding, action.hypothesis_ids)
             else:
-                self.domain.session.check_query(action.tool)
+                self.check_tool(action)
         except ValueError as exc:
             code = str(exc)
             termination = code if code in ("budget_exhausted", "repeated_query") else (
-                "invalid_finding" if isinstance(action, Finish) else "invalid_action")
+                "invalid_finding" if isinstance(action, self.finish_type) else "invalid_action")
             rejected = rejected_candidate(action)
             result = self.report(termination=termination, validation_error=code,
                 rejected_candidate=rejected,
-                rejected_finding=action.finding if isinstance(action, Finish) and rejected.status == "stored" else None)
+                rejected_finding=action.finding if isinstance(action, self.finish_type) and rejected.status == "stored" else None)
             if termination in ("invalid_action", "invalid_finding"):
                 validation_diagnostic(result, code)
             return self.output(result, raw=None)
         self.budget.check()
-        if isinstance(action, Finish):
+        if isinstance(action, self.finish_type):
             self.domain.ledger = candidate
             return self.output(self.report(finding=action.finding, claim_hypothesis_versions=versions), raw=None)
         return self.output(prepared=dict(action=action.model_dump(),
@@ -200,13 +204,22 @@ class BundleGraphRun(SerialGraphRun):
         self.budget.check()
         prepared = state["prepared"]
         action = self.action_schema.validate_python(prepared["action"])
-        evidence = self.domain.session.query(action.tool)
-        self.domain.ledger = BundleLedger.from_history(prepared["history"])
-        self.domain.tasks.append(dict(turn=prepared["turn"], source=action.tool,
+        evidence = self.execute_tool(action)
+        self.domain.ledger = self.ledger_type.from_history(prepared["history"])
+        self.domain.tasks.append(dict(turn=prepared["turn"], **self.task_scope(action),
             purpose=getattr(action, "purpose", None), hypothesis_versions=prepared["versions"],
             evidence_id=evidence.id, status="completed", cost_tool_calls=1))
         self.budget.check()
         return self.output(prepared=None)
+
+    def check_tool(self, action):
+        self.domain.session.check_query(action.tool)
+
+    def execute_tool(self, action):
+        return self.domain.session.query(action.tool)
+
+    def task_scope(self, action):
+        return {"source": action.tool}
 
     def compile(self):
         graph = StateGraph(BundleGraphState)
