@@ -10,6 +10,9 @@ from backend.investigation.snapshot_store import SnapshotStore
 
 def replay(root):
     manifest = root / "collection.private.json"
+    plan = json.loads((root / "plan.private.json").read_text(encoding="utf-8"))
+    if plan.get("split") != "development":
+        raise ValueError("heldout_replay_requires_frozen_evaluation_protocol")
     content = manifest.read_bytes()
     store = SnapshotStore(root / "snapshots")
     reports = []

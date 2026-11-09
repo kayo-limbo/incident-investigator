@@ -12,6 +12,7 @@ from pathlib import Path
 
 import httpx
 
+from evals.paired_plan import CollectionPlan
 from backend.investigation.evidence_models import WindowQuery
 from backend.investigation.paired_evidence import (
     PairedBundleV2 as PairedBundle, PairedWindowV2 as PairedWindow, TimedReading, mask_sources,
@@ -30,6 +31,7 @@ CASES = {
     "capacity": ((60, 2, 17), (60, 1, 17)),
     "arrival": ((60, 2, 20), (60, 2, 33)),
     "restart": ((60, 2, 10), (60, 2, 10)),
+    "compound": ((60, 3, 10), (60, 1, 17)),
 }
 LIMITS = dict(max_requests=1000, max_in_flight=100, request_timeout=5.0,
               drain_timeout=10.0, max_lag_seconds=.1, max_tail_fraction=.2,
@@ -55,7 +57,7 @@ def write(path, value):
 
 def sources():
     paths = sorted((ROOT / "backend/investigation").glob("*.py")) + sorted((ROOT / "lab").rglob("*.py"))
-    paths += [Path(__file__), ROOT / "compose.yaml", ROOT / "Dockerfile", ROOT / "requirements.txt"]
+    paths += [ROOT / "evals/paired_plan.py", Path(__file__), ROOT / "compose.yaml", ROOT / "Dockerfile", ROOT / "requirements.txt"]
     return {p.relative_to(ROOT).as_posix(): p.read_bytes() for p in paths}
 
 
@@ -244,14 +246,14 @@ def describe(bundle):
     return result
 
 
-def assess_case(name, windows, bundle):
+def assess_case(name, windows, bundle, specs=None):
     """Development feasibility gates, separate from collection integrity or model scoring."""
     metrics = describe(bundle)
     a, b = metrics["reference"], metrics["incident"]
     ba = business_summary(windows["reference"]["load"]["samples"])
     bb = business_summary(windows["incident"]["load"]["samples"])
     failures = []
-    for window, spec in zip(("reference", "incident"), CASES[name]):
+    for window, spec in zip(("reference", "incident"), specs or CASES[name]):
         reading = getattr(bundle, window).runtime.after
         if reading.max_connections != spec[1] or reading.pool_timeout_ms != 1000:
             failures.append(window + "_unexpected_config")
@@ -259,7 +261,7 @@ def assess_case(name, windows, bundle):
             a["inventory_ms_p95"] >= 150 or a["pre_send_ms_p95"] is None or a["pre_send_ms_p95"] >= 50):
         failures.append("reference_not_healthy")
     ratio = b["rate"] / a["rate"] if a["rate"] else 0
-    if name == "arrival":
+    if name in ("arrival", "compound"):
         if ratio < 1.5:
             failures.append("arrival_change_not_observed")
     elif not .9 <= ratio <= 1.1:
@@ -275,7 +277,7 @@ def assess_case(name, windows, bundle):
           bb["client_p95_ms"] < ba["client_p95_ms"] + 100):
         failures.append("caller_symptom_not_observed")
     changed_process = a["process_id"] != b["process_id"]
-    if (name in ("restart", "capacity")) != changed_process:
+    if (name in ("restart", "capacity", "compound")) != changed_process:
         failures.append("unexpected_process_transition")
     return dict(ready=not failures, failures=failures, business_reference=ba, business_incident=bb,
                 rate_ratio=ratio, source_review="manual_review_required")
@@ -294,17 +296,26 @@ def recover(base):
         return dict(verified=True, runtime=reading.model_dump(), status=response.status_code, business=response.json())
 
 
-def collect(directory, *, names=None, repeats=2, duration=15.0):
+def collect(directory, *, names=None, repeats=2, duration=15.0, explicit_plan=None):
+    if explicit_plan is not None:
+        explicit_plan = CollectionPlan.model_validate(explicit_plan)
+        cases = explicit_plan.cases
+        names, repeats, duration = list(cases), explicit_plan.repeats, explicit_plan.duration
+    else:
+        cases = CASES
     names = list(CASES) if names is None else names
-    if (not names or len(set(names)) != len(names) or any(n not in CASES for n in names) or
+    if (not names or len(set(names)) != len(names) or any(n not in cases for n in names) or
             type(repeats) is not int or not 1 <= repeats <= 3 or not math.isfinite(duration) or not 1 <= duration <= 30 or
-            any(math.ceil(s[2] * duration) > LIMITS["max_requests"] for n in names for s in CASES[n])):
+            any(math.ceil(s[2] * duration) > LIMITS["max_requests"] for n in names for s in cases[n])):
         raise ValueError("invalid_collection_plan")
     directory.mkdir(parents=True, exist_ok=False)
     source = sources()
     plan = dict(protocol="paired-development-v2", split="development", duration=duration, repeats=repeats,
-                cases={n: CASES[n] for n in names}, limits=LIMITS,
+                cases={n: cases[n] for n in names}, limits=LIMITS,
                 source_hashes={p: hashlib.sha256(b).hexdigest() for p, b in source.items()})
+    if explicit_plan is not None:
+        plan.update(protocol="paired-planned-v1", split=explicit_plan.split,
+                    input_plan=explicit_plan.model_dump(mode="json"))
     write(directory / "plan.private.json", plan)
     with zipfile.ZipFile(directory / "protocol-sources.zip", "x") as archive:
         for name, content in source.items():
@@ -322,7 +333,7 @@ def collect(directory, *, names=None, repeats=2, duration=15.0):
                 result["cases"].append(entry)
                 write(target, result)
                 try:
-                    for window, spec in zip(("reference", "incident"), CASES[name]):
+                    for window, spec in zip(("reference", "incident"), cases[name]):
                         delay, pool, rate = spec
                         args = ["up", "-d", "--wait", "--wait-timeout", "60"]
                         if name == "restart" and window == "incident":
@@ -341,7 +352,7 @@ def collect(directory, *, names=None, repeats=2, duration=15.0):
                     bundle = rebuild_pair(entry["windows"], LIMITS)
                     entry.update(snapshot_id=store.freeze(bundle.model_dump(mode="json")),
                                  observations=describe(bundle), valid=True,
-                                 feasibility=assess_case(name, entry["windows"], bundle))
+                                 feasibility=assess_case(name, entry["windows"], bundle, cases[name]))
                     entry["source_ablations"] = {
                         "trace_only": store.freeze(mask_sources(bundle.model_dump(mode="json"), runtime=False)),
                         "runtime_only": store.freeze(mask_sources(bundle.model_dump(mode="json"), trace=False))}
@@ -370,10 +381,16 @@ def audit(directory):
     result = json.loads((directory / "collection.private.json").read_text(encoding="utf-8"))
     if plan["source_hashes"] != {p: hashlib.sha256(b).hexdigest() for p, b in sources().items()}:
         raise ValueError("frozen_protocol_changed")
-    if (plan["protocol"] != "paired-development-v2" or plan["split"] != "development" or
+    if plan["protocol"] == "paired-planned-v1":
+        requested = CollectionPlan.model_validate(plan["input_plan"])
+        if any(plan[k] != requested.model_dump(mode="json")[k] for k in ("split", "duration", "repeats", "cases")):
+            raise ValueError("input_plan_mismatch")
+    elif (plan["protocol"] != "paired-development-v2" or plan["split"] != "development" or
             plan["limits"] != LIMITS or not 1 <= plan["repeats"] <= 3 or
             not 1 <= plan["duration"] <= 30 or not plan["cases"] or
             any(n not in CASES or specs != [list(s) for s in CASES[n]] for n, specs in plan["cases"].items())):
+        raise ValueError("invalid_frozen_plan")
+    if plan["limits"] != LIMITS:
         raise ValueError("invalid_frozen_plan")
     with zipfile.ZipFile(directory / "protocol-sources.zip") as archive:
         if {p: hashlib.sha256(archive.read(p)).hexdigest() for p in archive.namelist()} != plan["source_hashes"]:
@@ -401,7 +418,7 @@ def audit(directory):
                 raise ValueError("load_plan_mismatch")
         if store.read(entry["snapshot_id"]) != bundle.model_dump(mode="json") or entry["observations"] != describe(bundle):
             raise ValueError("bundle_provenance_mismatch")
-        if entry["feasibility"] != assess_case(entry["name"], entry["windows"], bundle):
+        if entry["feasibility"] != assess_case(entry["name"], entry["windows"], bundle, plan["cases"][entry["name"]]):
             raise ValueError("feasibility_mismatch")
         for name, kwargs in (("trace_only", dict(runtime=False)), ("runtime_only", dict(trace=False))):
             if store.read(entry["source_ablations"][name]) != mask_sources(bundle.model_dump(mode="json"), **kwargs):
@@ -415,13 +432,18 @@ def main():
     parser.add_argument("mode", choices=("collect", "audit"))
     parser.add_argument("directory", type=Path)
     parser.add_argument("--cases", nargs="+", choices=list(CASES))
-    parser.add_argument("--repeats", type=int, default=2)
-    parser.add_argument("--duration", type=float, default=15.0)
+    parser.add_argument("--plan", type=Path, help="显式开发/保留集参数JSON，不能与旧参数选项混用")
+    parser.add_argument("--repeats", type=int)
+    parser.add_argument("--duration", type=float)
     args = parser.parse_args()
+    if args.plan and (args.cases is not None or args.repeats is not None or args.duration is not None):
+        parser.error("--plan不能与--cases/--repeats/--duration混用")
     if args.mode == "audit":
         print(json.dumps(audit(args.directory)))
     else:
-        result = collect(args.directory, names=args.cases, repeats=args.repeats, duration=args.duration)
+        result = collect(args.directory, names=args.cases, repeats=args.repeats if args.repeats is not None else 2,
+                         duration=args.duration if args.duration is not None else 15.0,
+                         explicit_plan=json.loads(args.plan.read_text(encoding="utf-8")) if args.plan else None)
         if not result["all_valid"]:
             raise SystemExit(1)
 
