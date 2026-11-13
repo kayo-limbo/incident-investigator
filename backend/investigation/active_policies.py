@@ -77,6 +77,23 @@ class PolicyCancelled(asyncio.CancelledError):
         self.report = report
 
 
+def rejected_action(raw, reason, call):
+    """Persist only schema-valid, bounded fields; never retain free model text."""
+    try:
+        plan = Plan.model_validate(raw) if isinstance(raw, Plan) or isinstance(raw, dict) and 'query' in raw else None
+        query = plan.query if plan else Query.model_validate(raw)
+    except (ValidationError, TypeError):
+        return dict(reason=reason, model_call=call, candidate_available=False)
+    item = dict(reason=reason, model_call=call, candidate_available=True,
+                query=query.model_dump())
+    if plan:
+        item.update(hypothesis_ids=plan.hypothesis_ids,
+                    gap_matches_query=plan.gap == ':'.join(x for x in
+                        (query.tool, query.window, query.trace_id) if x),
+                    outcomes_match=plan.expected_outcomes == OUTCOMES[query.tool])
+    return item
+
+
 async def investigate_policy(store, key, model=None, *, strategy='fixed', budget=6,
                              timeout_seconds=120, max_total_tokens=40000, scoring=True):
     if strategy not in ('fixed', 'react', 'active') or (strategy != 'fixed' and model is None):
@@ -87,6 +104,7 @@ async def investigate_policy(store, key, model=None, *, strategy='fixed', budget
     started, usage = monotonic(), Usage()
     run = ActiveInvestigation(store, key, budget)
     calls, termination, failure = 0, 'completed', None
+    raw, rejection = None, None
 
     def report():
         result = run.report()
@@ -94,7 +112,7 @@ async def investigate_policy(store, key, model=None, *, strategy='fixed', budget
             entry['plan_origin'] = 'model' if strategy == 'active' else 'executor_from_query' if strategy == 'react' else 'fixed_policy'
         usage.elapsed_ms = (monotonic() - started) * 1000
         result.update(protocol='active-query-policies-v1', strategy=strategy, scoring=scoring if strategy == 'active' else None,
-            termination=termination, failure=failure, model_usage=usage.model_dump(),
+            termination=termination, failure=failure, rejected_action=rejection, model_usage=usage.model_dump(),
             tool_calls=len(run.evidence), model_calls=calls,
             token_budget=tokens.snapshot(usage).model_dump() if tokens.snapshot(usage) else None)
         result['limitations'].append('本协议只比较查询选择；诊断与停止由共同确定性规则生成，不评测模型独立诊断。')
@@ -143,10 +161,12 @@ async def investigate_policy(store, key, model=None, *, strategy='fixed', budget
         termination, failure = 'model_error', exc.code
     except ValidationError:
         termination, failure = 'invalid_action', 'invalid_schema'
+        rejection = rejected_action(raw, failure, calls)
     except ValueError as exc:
         termination = 'invalid_action'
         # Only domain errors from local validation; no raw model values retained.
         failure = str(exc) if str(exc) in {'invalid_query_scope', 'repeated_query', 'query_expectation_mismatch',
             'duplicate_hypotheses', 'hypothesis_query_mismatch', 'unobserved_trace',
             'budget_exhausted', 'investigation_already_stopped'} else 'invalid_action'
+        rejection = rejected_action(raw, failure, calls)
     return report()

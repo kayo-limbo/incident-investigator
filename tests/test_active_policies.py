@@ -77,6 +77,42 @@ class PolicyTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn('private', json.dumps(result))
             self.assertEqual(len(result['history']), len(actions) - 1)
 
+    async def test_rejected_http_actions_are_bounded_and_do_not_commit(self):
+        mismatch = wrap_query(QUERIES[2]).model_dump()
+        mismatch['hypothesis_ids'] = ['downstream', 'capacity']
+        expectation = wrap_query(QUERIES[2]).model_dump()
+        expectation.update(gap='private-text' * 1000, expected_outcomes=['private-text' * 1000])
+        cases = [(ActivePlanModel, 'active', mismatch, 'hypothesis_query_mismatch'),
+                 (ReactQueryModel, 'react', dict(tool='compare_runtime_config', window='incident'), 'invalid_query_scope'),
+                 (ActivePlanModel, 'active', expectation, 'query_expectation_mismatch')]
+        initial = ActiveInvestigation(self.store, self.key).report()
+        for adapter, policy, candidate, reason in cases:
+            with self.subTest(reason=reason):
+                def handler(request):
+                    return httpx.Response(200, json={'choices': [{'finish_reason': 'stop',
+                        'message': {'content': json.dumps(candidate)}}],
+                        'usage': {'prompt_tokens': 10, 'completion_tokens': 10, 'total_tokens': 20}})
+                async with adapter(ModelConfig('http://localhost', 'test', 'test-key'),
+                                   transport=httpx.MockTransport(handler)) as model:
+                    result = await investigate_policy(self.store, self.key, model, strategy=policy)
+                self.assertEqual(result['failure'], reason)
+                self.assertEqual(result['evidence'], initial['evidence'])
+                self.assertEqual(result['state'], initial['state'])
+                self.assertEqual(result['history'], [])
+                self.assertEqual(result['tool_calls'], 1)
+                self.assertEqual(result['model_calls'], 1)
+                self.assertEqual(result['model_usage']['calls'][0]['total_tokens'], 20)
+                diagnostic = result['rejected_action']
+                self.assertTrue(diagnostic['candidate_available'])
+                self.assertEqual(diagnostic['reason'], reason)
+                self.assertEqual(diagnostic['query']['tool'], 'compare_runtime_config')
+                self.assertLess(len(json.dumps(diagnostic)), 700)
+                self.assertNotIn('private-text', json.dumps(result))
+                if reason == 'hypothesis_query_mismatch':
+                    self.assertEqual(diagnostic['hypothesis_ids'], ['downstream', 'capacity'])
+                if reason == 'invalid_query_scope':
+                    self.assertEqual(diagnostic['query']['window'], 'incident')
+
     async def test_timeout_and_cancel_retain_partial_report(self):
         entered = asyncio.Event()
         class Waiting:
