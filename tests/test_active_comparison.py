@@ -9,7 +9,8 @@ from unittest.mock import patch
 from backend.investigation.model import ModelConfig
 from backend.investigation.paired_evidence import PairedBundleV2, mask_sources
 from backend.investigation.snapshot_store import SnapshotStore
-from backend.investigation.active_policies import wrap_query
+from backend.investigation.active_policies import wrap_query, investigate_policy
+from test_active_policies import Scripted, QUERIES
 from evals.run_active_comparison import freeze, validate, evaluate, summarize, score, CASES
 from test_paired_investigation import fixture
 
@@ -50,6 +51,27 @@ class ComparisonTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(before, (self.destination / 'fixed-reports/0-fixed.json').read_bytes())
         with self.assertRaises(FileExistsError):
             self.freeze()
+
+    async def test_alternative_path_sufficiency_replays_into_comparison_metrics(self):
+        # Synthetic mechanism check, not a measured model policy improvement.
+        value = fixture('arrival')
+        for row in value['incident']['trace']['requests']:
+            row.update(inventory_ms=350., orders_ms=700.)
+        store = SnapshotStore(self.root / 'snapshots')
+        key = store.freeze(value)
+        sample = dict(snapshot_id=key, expected='competing_changes')
+        fixed = await investigate_policy(store, key)
+        actions = QUERIES[:2] + [QUERIES[3]]
+        for strategy in ('react', 'active'):
+            model = Scripted([wrap_query(q).model_dump() for q in actions] if strategy == 'active' else actions)
+            report = await investigate_policy(store, key, model, strategy=strategy)
+            metrics = score(report, sample, store, strategy)
+            self.assertTrue(metrics['accepted'])
+            self.assertEqual(metrics['tool_calls'], 4)
+            self.assertFalse(metrics['sufficiency']['exhaustive'])
+            self.assertEqual(report['state']['sufficiency']['unchecked_factors'], ['capacity'])
+        self.assertTrue(score(fixed, sample, store, 'fixed')['accepted'])
+        self.assertEqual(fixed['tool_calls'], 5)
 
     def test_split_membership_provenance_and_plan_tampering(self):
         p = self.root / 'plan.private.json'

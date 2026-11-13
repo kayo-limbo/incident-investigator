@@ -126,6 +126,8 @@ class ActiveInvestigation:
         after = self.state()
         self.history.append(dict(plan=plan.model_dump(), evidence_id=evidence['id'], outcome=data['outcome'],
             effects=EFFECTS.get(query.tool, {}).get(data['outcome'], {}),
+            resolved_gaps=sorted({k for h in before['hypotheses'].values() for k in h['missing']} -
+                                 {k for h in after['hypotheses'].values() for k in h['missing']}),
             before=before['hypotheses'], after=after['hypotheses']))
         return copy.deepcopy(evidence)
 
@@ -144,6 +146,11 @@ class ActiveInvestigation:
                       for h in ('downstream', 'capacity', 'arrival')}
         code, stop = 'insufficient_evidence', 'continue'
         phase = b['outcome'] if b and b['outcome'] != 'unavailable' else 'unknown'
+        valid_pair = bool(a and b and a['outcome'] == 'no_anomaly' and b['statistics'])
+        slow = bool(valid_pair and b['statistics']['inventory_ms'] >= 250 and
+                    b['statistics']['inventory_ms'] - a['statistics']['inventory_ms'] >= 100)
+        capacity = bool(config and config['outcome'] == 'decreased')
+        increased = bool(arrival and arrival['outcome'] == 'increased')
         if any(v and v['outcome'] == 'unavailable' for v in (a, b)):
             stop = 'source_missing'
         elif a and b:
@@ -153,6 +160,11 @@ class ActiveInvestigation:
                 code, stop = 'no_anomaly_observed', 'sufficient'
             elif any(v and v['outcome'] == 'unavailable' for v in (config, arrival)):
                 stop = 'source_missing'
+            elif phase != 'unknown' and sum((slow, capacity, increased)) >= 2:
+                # Existence of multiple changes is monotone: checking another
+                # factor cannot make this a single-change diagnosis. This does
+                # not certify that all simultaneous changes have been found.
+                code, stop = 'competing_changes', 'sufficient'
             elif config and arrival:
                 if 'unavailable' in (config['outcome'], arrival['outcome']):
                     stop = 'source_missing'
@@ -171,12 +183,21 @@ class ActiveInvestigation:
                         elif increased and config['outcome'] == 'unchanged':
                             code = 'arrival_change'
                     stop = 'sufficient' if code != 'insufficient_evidence' else 'conditions_not_met'
-                    for h, supported in (('downstream', slow), ('capacity', capacity), ('arrival', increased)):
-                        used = ['get_window_summary:reference', 'get_window_summary:incident']
-                        if h != 'downstream':
-                            used.append('compare_runtime_config' if h == 'capacity' else 'compare_arrival_rate')
-                        hypotheses[h].update(status='supported' if supported else 'inconclusive',
-                            supporting_evidence=[self.observed[k]['id'] for k in used] if supported else [], missing=[])
+        # Each feature has its own evidence requirement. Missing data never
+        # becomes a refutation, including when classification can stop early.
+        requirements = dict(downstream=keys[:2], capacity=[keys[2]], arrival=[keys[3]])
+        for h, supported in (('downstream', slow), ('capacity', capacity), ('arrival', increased)):
+            used = requirements[h]
+            missing = [k for k in used if not get(k) or get(k)['outcome'] == 'unavailable']
+            hypotheses[h]['missing'] = missing
+            if supported:
+                hypotheses[h].update(status='supported',
+                    supporting_evidence=[self.observed[k]['id'] for k in used])
+            elif not missing:
+                hypotheses[h]['status'] = 'inconclusive'
+        if valid_pair and not slow:
+            hypotheses['downstream'].update(status='refuted',
+                counter_evidence=[self.observed[k]['id'] for k in keys[:2]])
         # Feature-level refutations do not refute simultaneous alternative changes.
         for h, value, key, positive, negative in (
                 ('capacity', config, 'compare_runtime_config', 'decreased', 'unchanged'),
@@ -189,7 +210,14 @@ class ActiveInvestigation:
             for h in hypotheses.values():
                 if h['status'] == 'open':
                     h['status'] = 'inconclusive'
+        sufficiency = dict(stage=phase != 'unknown', reference=valid_pair,
+            classification=stop == 'sufficient',
+            scope='multiple_changes_exist' if code == 'competing_changes' else
+                  'sampled_no_anomaly' if code == 'no_anomaly_observed' else 'checked_change_conditions',
+            unchecked_factors=[h for h, value in hypotheses.items() if value['missing']],
+            exhaustive=valid_pair and not any(value['missing'] for value in hypotheses.values()))
         return dict(code=code, stage=phase, stop=stop, hypotheses=hypotheses, gaps=gaps,
+                    sufficiency=sufficiency,
                     remaining=self.remaining, references=refs)
 
     def candidates(self):
@@ -201,7 +229,7 @@ class ActiveInvestigation:
             tool, _, window = gap.partition(':')
             ids = ['capacity', 'arrival'] if tool.startswith('compare_') else ['downstream', 'capacity', 'arrival']
             # Reproducible heuristic: affected unresolved hypotheses + filled gap - cost.
-            unresolved = sum(state['hypotheses'][h]['status'] == 'open' for h in ids)
+            unresolved = sum(gap in state['hypotheses'][h]['missing'] for h in ids)
             plan = Plan(query=Query(tool=tool, window=window or None), hypothesis_ids=ids,
                         gap=gap, expected_outcomes=OUTCOMES[tool])
             result.append(dict(plan=plan.model_dump(), score=unresolved + 1 - 1, cost=1,
@@ -209,7 +237,7 @@ class ActiveInvestigation:
         return sorted(result, key=lambda item: -item['score'])
 
     def report(self):
-        return copy.deepcopy(dict(protocol='active-reference-v1', snapshot_id=self.snapshot_id,
+        return copy.deepcopy(dict(protocol='active-reference-v2', snapshot_id=self.snapshot_id,
             state=self.state(), evidence=self.evidence, history=self.history,
             limitations=['有限规则假设与确定性参考策略；不是LLM收益或通用语义验证。',
                          '同一工具单位费用不等于相同token或实际查询成本。',

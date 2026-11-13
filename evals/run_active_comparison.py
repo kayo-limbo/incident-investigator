@@ -121,7 +121,7 @@ def validate(directory, config=None):
 def score(report, sample, store, variant):
     """Reconstruct accepted evidence/state; labels are evaluator-only, not a semantic judge."""
     strategy, scoring = ('fixed', True) if variant == 'fixed' else VARIANTS[variant]
-    if (report['protocol'] != 'active-query-policies-v1' or report['snapshot_id'] != sample['snapshot_id'] or
+    if (report['protocol'] != 'active-query-policies-v2' or report['snapshot_id'] != sample['snapshot_id'] or
             report['strategy'] != strategy or report['scoring'] != (scoring if strategy == 'active' else None)):
         raise ValueError('report_identity_mismatch')
     run = ActiveInvestigation(store, sample['snapshot_id'], BUDGET['budget'])
@@ -146,6 +146,7 @@ def score(report, sample, store, variant):
         raise ValueError('token_accounting_mismatch')
     accepted = report['termination'] == 'completed' and run.state()['stop'] != 'continue' and run.state()['code'] == sample['expected']
     return dict(accepted=accepted, termination=report['termination'], stop=run.state()['stop'],
+        sufficiency=run.state()['sufficiency'],
         tool_calls=len(run.evidence), model_calls=report['model_calls'],
         total_tokens=usage.totals()['total_tokens'], unknown_usage_calls=usage.totals()['unknown_usage_calls'],
         elapsed_ms=usage.elapsed_ms, repeated_query_rejected=report['failure'] == 'repeated_query',

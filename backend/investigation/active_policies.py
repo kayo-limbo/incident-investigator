@@ -33,7 +33,8 @@ compare_runtime_config和compare_arrival_rate不接受window或trace_id。
 每次查询费用1，重复查询和非法作用域会终止调查。不得输出URL、命令或额外字段。
 配置比较不返回入口速率；摘要不返回配置；请求下钻只返回单请求阶段。
 先判断参考/事件症状，再检查容量与入口的变化；正常两窗口可提前结束。
-异常须补齐配置与入口证据，缺失来源、预算不足或条件不满足时由程序拒答。
+单一变化结论须检查并存因素；正常参考与明确事件阶段下，两种变化已获支持可提前判为复合变化。
+提前分类不代表穷举变化，未查询因素仍保留缺口；缺失来源、预算不足或条件不满足时由程序拒答。
 容量和入口可以同时变化。只选择下一条最有区分价值的查询。
 """
 
@@ -111,7 +112,7 @@ async def investigate_policy(store, key, model=None, *, strategy='fixed', budget
         for entry in result['history']:
             entry['plan_origin'] = 'model' if strategy == 'active' else 'executor_from_query' if strategy == 'react' else 'fixed_policy'
         usage.elapsed_ms = (monotonic() - started) * 1000
-        result.update(protocol='active-query-policies-v1', strategy=strategy, scoring=scoring if strategy == 'active' else None,
+        result.update(protocol='active-query-policies-v2', strategy=strategy, scoring=scoring if strategy == 'active' else None,
             termination=termination, failure=failure, rejected_action=rejection, model_usage=usage.model_dump(),
             tool_calls=len(run.evidence), model_calls=calls,
             token_budget=tokens.snapshot(usage).model_dump() if tokens.snapshot(usage) else None)

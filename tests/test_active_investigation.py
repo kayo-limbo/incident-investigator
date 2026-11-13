@@ -1,4 +1,5 @@
 import tempfile
+from itertools import permutations
 import unittest
 from pathlib import Path
 
@@ -98,6 +99,8 @@ class ActiveTests(unittest.TestCase):
         run = self.run_state(mask_sources(fixture(), runtime=False))
         run.execute(plan('compare_runtime_config'))
         self.assertEqual(run.state()['hypotheses']['capacity']['status'], 'open')
+        self.assertEqual(run.history[-1]['resolved_gaps'], [])
+        self.assertIn('compare_runtime_config', run.state()['hypotheses']['capacity']['missing'])
         run = self.run_state(fixture('arrival'))
         run.execute(plan('compare_runtime_config'))
         self.assertEqual(run.state()['hypotheses']['capacity']['status'], 'refuted')
@@ -111,3 +114,37 @@ class ActiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'already_stopped'):
             run.execute(plan('compare_runtime_config'))
         self.assertEqual(run.report(), before)
+
+    def test_compound_sufficiency_preserves_unchecked_factor_for_every_order(self):
+        for factor in ('capacity', 'arrival', 'competing'):
+            value = fixture(factor)
+            for row in value['incident']['trace']['requests']:
+                row.update(inventory_ms=350., orders_ms=700.)
+            actions = [plan('get_window_summary', w) for w in ('reference', 'incident')]
+            actions += [plan('compare_runtime_config'), plan('compare_arrival_rate')]
+            for ordered in permutations(actions):
+                run = self.run_state(value)
+                for action in ordered:
+                    if run.state()['stop'] != 'continue':
+                        break
+                    run.execute(action)
+                state = run.state()
+                self.assertEqual(state['code'], 'competing_changes')
+                self.assertEqual(state['sufficiency']['scope'], 'multiple_changes_exist')
+                self.assertGreaterEqual(sum(h['status'] == 'supported' for h in state['hypotheses'].values()), 2)
+                for h in state['sufficiency']['unchecked_factors']:
+                    self.assertEqual(state['hypotheses'][h]['status'], 'open')
+                    self.assertTrue(state['hypotheses'][h]['missing'])
+                self.assertEqual(state['sufficiency']['exhaustive'], not state['gaps'])
+
+    def test_single_change_cannot_skip_other_factor_even_at_budget_limit(self):
+        for kind, tool, unchecked in (('downstream', 'compare_runtime_config', 'arrival'),
+                                     ('capacity', 'compare_runtime_config', 'arrival'),
+                                     ('arrival', 'compare_arrival_rate', 'capacity')):
+            run = self.run_state(fixture(kind), budget=4)
+            for action in (plan('get_window_summary', 'reference'), plan('get_window_summary', 'incident'), plan(tool)):
+                run.execute(action)
+            self.assertEqual(run.state()['code'], 'insufficient_evidence')
+            self.assertEqual(run.state()['stop'], 'budget_exhausted')
+            self.assertIn(unchecked, run.state()['sufficiency']['unchecked_factors'])
+            self.assertEqual(run.history[-1]['resolved_gaps'], [tool])
