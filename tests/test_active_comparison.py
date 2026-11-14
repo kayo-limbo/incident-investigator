@@ -13,6 +13,7 @@ from backend.investigation.active_policies import wrap_query, investigate_policy
 from test_active_policies import Scripted, QUERIES
 from evals.run_active_comparison import freeze, validate, evaluate, summarize, score, CASES
 from test_paired_investigation import fixture
+from test_active_investigation import mixed_fixture
 
 
 class ComparisonTests(unittest.IsolatedAsyncioTestCase):
@@ -56,7 +57,7 @@ class ComparisonTests(unittest.IsolatedAsyncioTestCase):
         # Synthetic mechanism check, not a measured model policy improvement.
         value = fixture('arrival')
         for row in value['incident']['trace']['requests']:
-            row.update(inventory_ms=350., orders_ms=700.)
+            row.update(inventory_ms=350., pre_send_ms=0., orders_ms=700.)
         store = SnapshotStore(self.root / 'snapshots')
         key = store.freeze(value)
         sample = dict(snapshot_id=key, expected='competing_changes')
@@ -72,6 +73,30 @@ class ComparisonTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(report['state']['sufficiency']['unchecked_factors'], ['capacity'])
         self.assertTrue(score(fixed, sample, store, 'fixed')['accepted'])
         self.assertEqual(fixed['tool_calls'], 5)
+
+    async def test_localization_same_permission_and_replayed_metrics(self):
+        store = SnapshotStore(self.root / 'snapshots')
+        value = mixed_fixture(False)
+        key = store.freeze(value)
+        sample = dict(snapshot_id=key, expected='downstream_change')
+        detail = dict(tool='get_request_trace', window='incident',
+                      trace_id=value['incident']['trace']['requests'][0]['trace_id'])
+        for variant in ('fixed', 'react', 'active', 'active_no_scoring'):
+            strategy = 'active' if variant == 'active_no_scoring' else variant
+            actions = QUERIES[:2] + [detail] + QUERIES[2:]
+            model = Scripted([wrap_query(q).model_dump() for q in actions] if strategy == 'active' else actions)
+            report = await investigate_policy(store, key, model, strategy=strategy,
+                                              scoring=variant != 'active_no_scoring')
+            metrics = score(report, sample, store, variant)
+            self.assertTrue(metrics['accepted'])
+            self.assertEqual(metrics['tool_calls'], 6)
+            self.assertEqual(metrics['localization']['stage'], 'downstream')
+            if strategy == 'active':
+                self.assertIn('get_request_trace', [c['plan']['query']['tool'] for c in model.contexts[2].candidates])
+            changed = copy.deepcopy(report)
+            changed['state']['localization']['stage'] = 'mixed'
+            with self.assertRaisesRegex(ValueError, 'evidence_state_mismatch'):
+                score(changed, sample, store, variant)
 
     def test_split_membership_provenance_and_plan_tampering(self):
         p = self.root / 'plan.private.json'

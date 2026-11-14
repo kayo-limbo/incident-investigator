@@ -16,6 +16,16 @@ def plan(tool, window=None, trace_id=None):
                 expected_outcomes=OUTCOMES[tool]).model_dump()
 
 
+def mixed_fixture(together):
+    value = fixture('stable')
+    rows = value['incident']['trace']['requests']
+    for i in (0, 1):
+        rows[i].update(inventory_ms=350., orders_ms=800. - i)
+    for i in ((0, 1) if together else (2, 3)):
+        rows[i].update(pre_send_ms=300., orders_ms=800. - i)
+    return value
+
+
 class ActiveTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -119,7 +129,7 @@ class ActiveTests(unittest.TestCase):
         for factor in ('capacity', 'arrival', 'competing'):
             value = fixture(factor)
             for row in value['incident']['trace']['requests']:
-                row.update(inventory_ms=350., orders_ms=700.)
+                row.update(inventory_ms=350., pre_send_ms=0., orders_ms=700.)
             actions = [plan('get_window_summary', w) for w in ('reference', 'incident')]
             actions += [plan('compare_runtime_config'), plan('compare_arrival_rate')]
             for ordered in permutations(actions):
@@ -148,3 +158,38 @@ class ActiveTests(unittest.TestCase):
             self.assertEqual(run.state()['stop'], 'budget_exhausted')
             self.assertIn(unchecked, run.state()['sufficiency']['unchecked_factors'])
             self.assertEqual(run.history[-1]['resolved_gaps'], [tool])
+
+    def test_mixed_summary_requires_targeted_localization_without_changing_population_stage(self):
+        for together, expected in ((True, 'mixed'), (False, 'downstream')):
+            run = self.run_state(mixed_fixture(together))
+            for action in (plan('get_window_summary', 'reference'), plan('get_window_summary', 'incident'),
+                           plan('compare_runtime_config'), plan('compare_arrival_rate')):
+                run.execute(action)
+            state = run.state()
+            self.assertEqual(state['stage'], 'mixed')
+            self.assertEqual(state['stop'], 'continue')
+            self.assertFalse(state['sufficiency']['classification'])
+            self.assertEqual(state['localization']['status'], 'pending')
+            target = state['localization']['trace_id']
+            candidate = run.candidates()[0]['plan']
+            self.assertEqual(candidate['query']['trace_id'], target)
+            run.execute(candidate)
+            state = run.state()
+            self.assertEqual(state['localization']['stage'], expected)
+            self.assertEqual(state['stage'], 'mixed')
+            self.assertEqual(state['code'], 'downstream_change')
+            self.assertEqual(run.history[-1]['resolved_gaps'], ['get_request_trace:incident:' + target])
+            self.assertEqual(len(state['localization']['references']), 2)
+
+    def test_wrong_request_cannot_fill_local_gap_and_budget_cannot_bypass_it(self):
+        run = self.run_state(mixed_fixture(False))
+        for window in ('reference', 'incident'):
+            run.execute(plan('get_window_summary', window))
+        ids = run.evidence[-1]['data']['drilldown_ids']
+        run.execute(plan('get_request_trace', 'incident', ids[1]))
+        self.assertEqual(run.state()['localization']['status'], 'pending')
+        self.assertEqual(run.history[-1]['resolved_gaps'], [])
+        for tool in ('compare_runtime_config', 'compare_arrival_rate'):
+            run.execute(plan(tool))
+        self.assertEqual(run.state()['stop'], 'budget_exhausted')
+        self.assertEqual(run.state()['code'], 'insufficient_evidence')

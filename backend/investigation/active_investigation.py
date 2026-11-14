@@ -126,8 +126,10 @@ class ActiveInvestigation:
         after = self.state()
         self.history.append(dict(plan=plan.model_dump(), evidence_id=evidence['id'], outcome=data['outcome'],
             effects=EFFECTS.get(query.tool, {}).get(data['outcome'], {}),
-            resolved_gaps=sorted({k for h in before['hypotheses'].values() for k in h['missing']} -
-                                 {k for h in after['hypotheses'].values() for k in h['missing']}),
+            resolved_gaps=sorted(({k for h in before['hypotheses'].values() for k in h['missing']} |
+                                  set(before['localization']['missing'])) -
+                                 ({k for h in after['hypotheses'].values() for k in h['missing']} |
+                                  set(after['localization']['missing']))),
             before=before['hypotheses'], after=after['hypotheses']))
         return copy.deepcopy(evidence)
 
@@ -204,6 +206,28 @@ class ActiveInvestigation:
                 ('arrival', arrival, 'compare_arrival_rate', 'increased', 'stable')):
             if value and value['outcome'] == negative:
                 hypotheses[h].update(status='refuted', counter_evidence=[self.observed[key]['id']])
+        localization = dict(scope='slowest_sampled_incident_request', status='not_required',
+                            stage=None, trace_id=None, missing=[], references=[])
+        if valid_pair and phase == 'mixed':
+            trace_id = b['drilldown_ids'][0]
+            detail_key = 'get_request_trace:incident:' + trace_id
+            detail = get(detail_key)
+            localization.update(trace_id=trace_id, status='pending', missing=[detail_key])
+            if detail:
+                row = detail['request']
+                if all(row[k] is not None for k in ('inventory_ms', 'pre_send_ms', 'orders_ms')):
+                    request_stage = stage(dict(inventory_ms=row['inventory_ms'], pre_send_ms=row['pre_send_ms'],
+                        orders_ms=row['orders_ms'], pool_timeout=row['error_type'] == 'PoolTimeout',
+                        failed=row['status'] != 200))
+                    localization.update(status='observed', stage=request_stage, missing=[],
+                        references=[self.observed['get_window_summary:incident']['id'], self.observed[detail_key]['id']])
+                else:
+                    localization['status'] = 'unavailable'
+            elif detail_key not in gaps:
+                gaps.append(detail_key)
+            if stop == 'sufficient' and localization['missing']:
+                code = 'insufficient_evidence'
+                stop = 'source_missing' if detail else 'continue'
         if stop == 'continue' and self.remaining <= 0:
             stop = 'budget_exhausted'
         if stop != 'continue' and code == 'insufficient_evidence':
@@ -217,7 +241,7 @@ class ActiveInvestigation:
             unchecked_factors=[h for h, value in hypotheses.items() if value['missing']],
             exhaustive=valid_pair and not any(value['missing'] for value in hypotheses.values()))
         return dict(code=code, stage=phase, stop=stop, hypotheses=hypotheses, gaps=gaps,
-                    sufficiency=sufficiency,
+                    sufficiency=sufficiency, localization=localization,
                     remaining=self.remaining, references=refs)
 
     def candidates(self):
@@ -226,18 +250,20 @@ class ActiveInvestigation:
             return []
         result = []
         for gap in state['gaps']:
-            tool, _, window = gap.partition(':')
+            parts = gap.split(':')
+            tool, window, trace_id = (parts + [None, None])[:3]
             ids = ['capacity', 'arrival'] if tool.startswith('compare_') else ['downstream', 'capacity', 'arrival']
             # Reproducible heuristic: affected unresolved hypotheses + filled gap - cost.
             unresolved = sum(gap in state['hypotheses'][h]['missing'] for h in ids)
-            plan = Plan(query=Query(tool=tool, window=window or None), hypothesis_ids=ids,
+            unresolved += gap in state['localization']['missing']
+            plan = Plan(query=Query(tool=tool, window=window, trace_id=trace_id), hypothesis_ids=ids,
                         gap=gap, expected_outcomes=OUTCOMES[tool])
             result.append(dict(plan=plan.model_dump(), score=unresolved + 1 - 1, cost=1,
                                effects=copy.deepcopy(EFFECTS.get(tool, {}))))
         return sorted(result, key=lambda item: -item['score'])
 
     def report(self):
-        return copy.deepcopy(dict(protocol='active-reference-v2', snapshot_id=self.snapshot_id,
+        return copy.deepcopy(dict(protocol='active-reference-v3', snapshot_id=self.snapshot_id,
             state=self.state(), evidence=self.evidence, history=self.history,
             limitations=['有限规则假设与确定性参考策略；不是LLM收益或通用语义验证。',
                          '同一工具单位费用不等于相同token或实际查询成本。',

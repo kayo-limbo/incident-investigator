@@ -17,6 +17,14 @@ ORDER = ['get_window_summary:reference', 'get_window_summary:incident',
          'compare_runtime_config', 'compare_arrival_rate']
 
 
+def fixed_query(run):
+    key = next((k for k in ORDER if k not in run.observed), None)
+    if key is None:
+        key = run.state()['localization']['missing'][0]
+    tool, window, trace_id = (key.split(':') + [None, None])[:3]
+    return Query(tool=tool, window=window, trace_id=trace_id)
+
+
 class Context(Strict):
     snapshot_id: str
     evidence: list[dict]
@@ -35,6 +43,8 @@ compare_runtime_config和compare_arrival_rate不接受window或trace_id。
 先判断参考/事件症状，再检查容量与入口的变化；正常两窗口可提前结束。
 单一变化结论须检查并存因素；正常参考与明确事件阶段下，两种变化已获支持可提前判为复合变化。
 提前分类不代表穷举变化，未查询因素仍保留缺口；缺失来源、预算不足或条件不满足时由程序拒答。
+事件摘要为mixed且参考正常时，完成报告还需下钻incident摘要drilldown_ids首项，定位最慢采样请求。
+该请求的阶段单独记录，不替代窗口P95，不证明其他请求也有同样阶段。
 容量和入口可以同时变化。只选择下一条最有区分价值的查询。
 """
 
@@ -65,7 +75,8 @@ def context(run, strategy, scoring=True):
     if strategy == 'active':
         candidates = run.candidates()
         if not scoring:
-            candidates = sorted(candidates, key=lambda c: ORDER.index(c['plan']['gap']))
+            candidates = sorted(candidates, key=lambda c: ORDER.index(c['plan']['gap'])
+                                if c['plan']['gap'] in ORDER else len(ORDER))
             candidates = [{k: v for k, v in c.items() if k != 'score'} for c in candidates]
     return Context(snapshot_id=run.snapshot_id, evidence=copy.deepcopy(run.evidence),
         remaining_tool_calls=run.remaining, outcomes=copy.deepcopy(OUTCOMES),
@@ -112,7 +123,7 @@ async def investigate_policy(store, key, model=None, *, strategy='fixed', budget
         for entry in result['history']:
             entry['plan_origin'] = 'model' if strategy == 'active' else 'executor_from_query' if strategy == 'react' else 'fixed_policy'
         usage.elapsed_ms = (monotonic() - started) * 1000
-        result.update(protocol='active-query-policies-v2', strategy=strategy, scoring=scoring if strategy == 'active' else None,
+        result.update(protocol='active-query-policies-v3', strategy=strategy, scoring=scoring if strategy == 'active' else None,
             termination=termination, failure=failure, rejected_action=rejection, model_usage=usage.model_dump(),
             tool_calls=len(run.evidence), model_calls=calls,
             token_budget=tokens.snapshot(usage).model_dump() if tokens.snapshot(usage) else None)
@@ -123,9 +134,7 @@ async def investigate_policy(store, key, model=None, *, strategy='fixed', budget
         while run.state()['stop'] == 'continue':
             deadline.check()
             if strategy == 'fixed':
-                key = next(k for k in ORDER if k not in run.observed)
-                tool, _, window = key.partition(':')
-                action = wrap_query(Query(tool=tool, window=window or None))
+                action = wrap_query(fixed_query(run))
             else:
                 # At most one model decision per remaining tool slot; invalid actions never retry.
                 if calls >= budget - 1:

@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 from backend.investigation.active_investigation import ActiveInvestigation
-from backend.investigation.active_policies import ActivePlanModel, ReactQueryModel, PolicyCancelled, investigate_policy, ORDER
+from backend.investigation.active_policies import ActivePlanModel, ReactQueryModel, PolicyCancelled, investigate_policy, fixed_query, wrap_query
 from backend.investigation.model import ModelConfig
 from backend.investigation.paired_evidence import mask_sources
 from backend.investigation.snapshot_store import SnapshotStore
@@ -121,12 +121,14 @@ def validate(directory, config=None):
 def score(report, sample, store, variant):
     """Reconstruct accepted evidence/state; labels are evaluator-only, not a semantic judge."""
     strategy, scoring = ('fixed', True) if variant == 'fixed' else VARIANTS[variant]
-    if (report['protocol'] != 'active-query-policies-v2' or report['snapshot_id'] != sample['snapshot_id'] or
+    if (report['protocol'] != 'active-query-policies-v3' or report['snapshot_id'] != sample['snapshot_id'] or
             report['strategy'] != strategy or report['scoring'] != (scoring if strategy == 'active' else None)):
         raise ValueError('report_identity_mismatch')
     run = ActiveInvestigation(store, sample['snapshot_id'], BUDGET['budget'])
     origin = 'fixed_policy' if strategy == 'fixed' else 'model' if strategy == 'active' else 'executor_from_query'
     for step in report['history']:
+        if strategy == 'fixed' and step['plan'] != wrap_query(fixed_query(run)).model_dump():
+            raise ValueError('fixed_order_mismatch')
         run.execute(step['plan'])
         expected = {**run.history[-1], 'plan_origin': origin}
         if step != expected:
@@ -140,13 +142,12 @@ def score(report, sample, store, variant):
     if strategy != 'fixed' and (not len(run.history) <= report['model_calls'] <= len(run.history) + 1 or
             (report['termination'] == 'completed' and report['model_calls'] != len(run.history))):
         raise ValueError('decision_count_mismatch')
-    if strategy == 'fixed' and [h['plan']['gap'] for h in run.history] != ORDER[:len(run.history)]:
-        raise ValueError('fixed_order_mismatch')
     if report['token_budget'] != ObservedTokenBudget(BUDGET['max_total_tokens']).snapshot(usage).model_dump():
         raise ValueError('token_accounting_mismatch')
     accepted = report['termination'] == 'completed' and run.state()['stop'] != 'continue' and run.state()['code'] == sample['expected']
     return dict(accepted=accepted, termination=report['termination'], stop=run.state()['stop'],
         sufficiency=run.state()['sufficiency'],
+        localization=run.state()['localization'],
         tool_calls=len(run.evidence), model_calls=report['model_calls'],
         total_tokens=usage.totals()['total_tokens'], unknown_usage_calls=usage.totals()['unknown_usage_calls'],
         elapsed_ms=usage.elapsed_ms, repeated_query_rejected=report['failure'] == 'repeated_query',
