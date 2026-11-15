@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
+from pydantic import ValidationError
 
 from backend.investigation.active_policies import (investigate_policy, wrap_query, context,
     ReactQueryModel, ActivePlanModel, PolicyCancelled)
@@ -112,6 +113,54 @@ class PolicyTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(diagnostic['hypothesis_ids'], ['downstream', 'capacity'])
                 if reason == 'invalid_query_scope':
                     self.assertEqual(diagnostic['query']['window'], 'incident')
+
+    async def test_missing_drilldown_window_schema_and_http_regression(self):
+        target = fixture('competing')['incident']['trace']['requests'][0]['trace_id']
+        detail = dict(tool='get_request_trace', window='incident', trace_id=target)
+        before = ActiveInvestigation(self.store, self.key)
+        for q in QUERIES[:2]:
+            before.execute(wrap_query(q))
+        for adapter, strategy in ((ReactQueryModel, 'react'), (ActivePlanModel, 'active')):
+            def action(query):
+                return wrap_query(query).model_dump() if strategy == 'active' else dict(query)
+            valid = action(detail)
+            adapter.action_schema.validate_python(valid)
+            for query in (dict(detail, window=None), {k: v for k, v in detail.items() if k != 'window'},
+                          dict(tool='compare_runtime_config', window='incident')):
+                bad = action(detail if query['tool'] == 'get_request_trace' else QUERIES[2])
+                if strategy == 'active':
+                    bad['query'] = query
+                else:
+                    bad = query
+                with self.assertRaises(ValidationError):
+                    adapter.action_schema.validate_python(bad)
+            # The failed real action had a valid ID but window=null. The domain
+            # guard must still reject it even if the model ignores the Schema.
+            bad = action(detail)
+            (bad['query'] if strategy == 'active' else bad)['window'] = None
+            responses = iter([action(q) for q in QUERIES[:2]] + [bad])
+            sent = []
+            def handler(request):
+                sent.append(json.loads(request.content))
+                return httpx.Response(200, json={'choices': [{'finish_reason': 'stop',
+                    'message': {'content': json.dumps(next(responses))}}],
+                    'usage': {'prompt_tokens': 10, 'completion_tokens': 10, 'total_tokens': 20}})
+            async with adapter(ModelConfig('http://localhost', 'test', 'test-key'),
+                               transport=httpx.MockTransport(handler)) as model:
+                result = await investigate_policy(self.store, self.key, model, strategy=strategy)
+            self.assertEqual(result['failure'], 'invalid_query_scope')
+            self.assertEqual(result['state'], before.state())
+            self.assertEqual(result['evidence'], before.evidence)
+            self.assertEqual(len(result['history']), 2)
+            self.assertEqual(result['model_calls'], 3)
+            self.assertEqual(sum(c['total_tokens'] for c in result['model_usage']['calls']), 60)
+            self.assertIsNone(result['rejected_action']['query']['window'])
+            schema = adapter.action_schema.json_schema()
+            request_schema = schema['$defs']['RequestQuery']
+            self.assertTrue({'tool', 'window', 'trace_id'} <= set(request_schema['required']))
+            self.assertEqual(request_schema['properties']['window']['type'], 'string')
+            self.assertEqual(schema['$defs']['ComparisonQuery']['properties']['window']['type'], 'null')
+            self.assertIn(json.dumps(schema, ensure_ascii=False), sent[0]['messages'][0]['content'])
 
     async def test_timeout_and_cancel_retain_partial_report(self):
         entered = asyncio.Event()

@@ -2,8 +2,9 @@
 import asyncio
 import copy
 from time import monotonic
+from typing import Annotated, Literal
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import Field, TypeAdapter, ValidationError
 
 from .active_investigation import ActiveInvestigation, Query, Plan, OUTCOMES, query_key
 from .agent import ModelFailure
@@ -49,8 +50,35 @@ compare_runtime_config和compare_arrival_rate不接受window或trace_id。
 """
 
 
+class SummaryQuery(Query):
+    tool: Literal['get_window_summary']
+    window: Literal['reference', 'incident']
+    trace_id: None = None
+
+
+class RequestQuery(Query):
+    tool: Literal['get_request_trace']
+    window: Literal['reference', 'incident']
+    trace_id: str = Field(pattern=r'^[0-9a-f]{32}$')
+
+
+class ComparisonQuery(Query):
+    tool: Literal['compare_runtime_config', 'compare_arrival_rate']
+    window: None = None
+    trace_id: None = None
+
+
+# Model-facing contract. Execution still validates Query scope independently,
+# retaining bounded rejected-action diagnostics and actual call usage.
+SCOPED_QUERY = Annotated[SummaryQuery | RequestQuery | ComparisonQuery, Field(discriminator='tool')]
+
+
+class ScopedPlan(Plan):
+    query: SCOPED_QUERY
+
+
 class ReactQueryModel(AsyncWindowChatModel):
-    system_prompt, action_schema = PROMPT, TypeAdapter(Query)
+    system_prompt, action_schema = PROMPT, TypeAdapter(SCOPED_QUERY)
 
 
 class ActivePlanModel(AsyncWindowChatModel):
@@ -60,7 +88,7 @@ gap为tool[:window[:trace_id]]；预期分支完整复制outcomes[tool]，不预
 运行比较关联capacity和arrival；摘要/下钻至少关联两个不同假设。
 候选分数是启发式建议，不要求选择最高分；允许已发现请求的下钻。
 """
-    action_schema = TypeAdapter(Plan)
+    action_schema = TypeAdapter(ScopedPlan)
 
 
 def wrap_query(query):
