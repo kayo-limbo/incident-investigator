@@ -13,7 +13,7 @@ from backend.investigation.paired_evidence import mask_sources
 from backend.investigation.snapshot_store import SnapshotStore
 from backend.investigation.usage import Usage
 from backend.investigation.budget import ObservedTokenBudget
-from evals.collect_paired_windows import rebuild_pair
+from evals.collect_paired_windows import rebuild_pair, localization_expectation
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ('stable', 'downstream', 'capacity', 'arrival', 'restart', 'compound')
@@ -52,7 +52,8 @@ def freeze(root, destination, config):
         raise ValueError('development_collection_required')
     source_store = SnapshotStore(root / 'snapshots')
     samples, payloads = [], {}
-    for name in CASES:
+    mixed = source_plan.get('input_plan', {}).get('localization') == 'mixed_slowest'
+    for name in (('downstream',) if mixed else CASES):
         entries = [c for c in manifest['cases'] if c['name'] == name and c['repeat'] == 0]
         if len(entries) != 1 or not entries[0]['valid'] or not entries[0]['feasibility']['ready']:
             raise ValueError('preselected_case_unavailable')
@@ -73,6 +74,11 @@ def freeze(root, destination, config):
                 raise ValueError('ablation_provenance_mismatch')
             samples.append(dict(name=name, view=view, snapshot_id=key,
                 expected=LABELS[name] if view == 'complete' else 'insufficient_evidence'))
+            if mixed:
+                expectation = localization_expectation(case['windows'], rebuild_pair(case['windows'], source_plan['limits']))
+                if expectation['stage'] != 'mixed':
+                    raise ValueError('mixed_localization_not_observed')
+                samples[-1]['expected_localization'] = expectation
             payloads[key] = payload
     destination.mkdir(parents=True, exist_ok=False)
     store = SnapshotStore(destination / 'snapshots')
@@ -81,6 +87,7 @@ def freeze(root, destination, config):
             raise ValueError('snapshot_hash_mismatch')
     source = sources()
     plan = dict(protocol='active-comparison-development-v1', split='development', rounds=1,
+        suite='mixed-localization' if mixed else 'original',
         samples=samples, variants=VARIANTS, budget=BUDGET, model=settings(config),
         source_manifest_sha256=digest(raw), source_plan_sha256=digest((root / 'plan.private.json').read_bytes()),
         source_hashes={p: digest(b) for p, b in source.items()})
@@ -103,7 +110,11 @@ def validate(directory, config=None):
             plan['source_hashes'] != {p: digest(b) for p, b in sources().items()} or
             (config is not None and plan['model'] != settings(config))):
         raise ValueError('frozen_protocol_changed')
-    membership = [(n, 'complete') for n in CASES] + [('compound', 'trace_only'), ('compound', 'runtime_only')]
+    suite = plan.get('suite', 'original')
+    if suite not in ('original', 'mixed-localization'):
+        raise ValueError('unknown_suite')
+    membership = [('downstream', 'complete')] if suite == 'mixed-localization' else (
+        [(n, 'complete') for n in CASES] + [('compound', 'trace_only'), ('compound', 'runtime_only')])
     if [(s['name'], s['view']) for s in plan['samples']] != membership:
         raise ValueError('sample_membership_changed')
     store = SnapshotStore(directory / 'snapshots')
@@ -111,6 +122,8 @@ def validate(directory, config=None):
         expected = LABELS[sample['name']] if sample['view'] == 'complete' else 'insufficient_evidence'
         if sample['expected'] != expected:
             raise ValueError('expected_label_changed')
+        if suite == 'mixed-localization' and sample.get('expected_localization', {}).get('stage') != 'mixed':
+            raise ValueError('missing_localization_expectation')
         ActiveInvestigation(store, sample['snapshot_id'], BUDGET['budget'])
     with zipfile.ZipFile(directory / 'protocol-sources.zip') as archive:
         if {p: digest(archive.read(p)) for p in archive.namelist()} != plan['source_hashes']:
@@ -145,9 +158,15 @@ def score(report, sample, store, variant):
     if report['token_budget'] != ObservedTokenBudget(BUDGET['max_total_tokens']).snapshot(usage).model_dump():
         raise ValueError('token_accounting_mismatch')
     accepted = report['termination'] == 'completed' and run.state()['stop'] != 'continue' and run.state()['code'] == sample['expected']
+    expected_local = sample.get('expected_localization')
+    localization_accepted = None if expected_local is None else (
+        run.state()['localization']['status'] == 'observed' and
+        all(run.state()['localization'].get(k) == v for k, v in expected_local.items()))
+    accepted = accepted and localization_accepted is not False
     return dict(accepted=accepted, termination=report['termination'], stop=run.state()['stop'],
         sufficiency=run.state()['sufficiency'],
         localization=run.state()['localization'],
+        localization_accepted=localization_accepted,
         tool_calls=len(run.evidence), model_calls=report['model_calls'],
         total_tokens=usage.totals()['total_tokens'], unknown_usage_calls=usage.totals()['unknown_usage_calls'],
         elapsed_ms=usage.elapsed_ms, repeated_query_rejected=report['failure'] == 'repeated_query',

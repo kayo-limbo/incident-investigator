@@ -79,6 +79,8 @@ class ComparisonTests(unittest.IsolatedAsyncioTestCase):
         value = mixed_fixture(False)
         key = store.freeze(value)
         sample = dict(snapshot_id=key, expected='downstream_change')
+        sample['expected_localization'] = dict(stage='downstream',
+            trace_id=value['incident']['trace']['requests'][0]['trace_id'], scope='slowest_sampled_incident_request')
         detail = dict(tool='get_request_trace', window='incident',
                       trace_id=value['incident']['trace']['requests'][0]['trace_id'])
         for variant in ('fixed', 'react', 'active', 'active_no_scoring'):
@@ -91,6 +93,9 @@ class ComparisonTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(metrics['accepted'])
             self.assertEqual(metrics['tool_calls'], 6)
             self.assertEqual(metrics['localization']['stage'], 'downstream')
+            self.assertTrue(metrics['localization_accepted'])
+            wrong = {**sample, 'expected_localization': {**sample['expected_localization'], 'stage': 'mixed'}}
+            self.assertFalse(score(report, wrong, store, variant)['accepted'])
             if strategy == 'active':
                 self.assertIn('get_request_trace', [c['plan']['query']['tool'] for c in model.contexts[2].candidates])
             changed = copy.deepcopy(report)

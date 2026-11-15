@@ -246,7 +246,22 @@ def describe(bundle):
     return result
 
 
-def assess_case(name, windows, bundle, specs=None):
+def localization_expectation(windows, bundle):
+    """Evaluator-only oracle from raw spans; never calls investigation stage()."""
+    raw = windows['incident']
+    samples = {s['trace_id']: s for s in raw['load']['samples']}
+    rows = {t['traceID']: observe_trace(t, samples[t['traceID']]) for t in raw['raw_traces']}
+    target = max(bundle.incident.trace.requests, key=lambda r: r.orders_ms).trace_id
+    row = rows[target]
+    if row['orders_ms'] != max(r['orders_ms'] for r in rows.values()):
+        raise ValueError('localization_target_mismatch')
+    slow = row['inventory_ms'] is not None and row['inventory_ms'] >= 250
+    wait = row['pre_send_ms'] is not None and row['pre_send_ms'] >= 150 or row['error_type'] == 'PoolTimeout'
+    phase = 'mixed' if slow and wait else 'downstream' if slow else 'pre_send' if wait else 'unknown'
+    return dict(trace_id=target, stage=phase, scope='slowest_sampled_incident_request')
+
+
+def assess_case(name, windows, bundle, specs=None, localization='none'):
     """Development feasibility gates, separate from collection integrity or model scoring."""
     metrics = describe(bundle)
     a, b = metrics["reference"], metrics["incident"]
@@ -279,6 +294,12 @@ def assess_case(name, windows, bundle, specs=None):
     changed_process = a["process_id"] != b["process_id"]
     if (name in ("restart", "capacity", "compound")) != changed_process:
         failures.append("unexpected_process_transition")
+    if localization == 'mixed_slowest':
+        if (b['inventory_ms_p95'] is None or b['inventory_ms_p95'] < 250 or
+                b['pre_send_ms_p95'] is None or b['pre_send_ms_p95'] < 150):
+            failures.append('mixed_window_not_observed')
+        if localization_expectation(windows, bundle)['stage'] != 'mixed':
+            failures.append('mixed_slowest_request_not_observed')
     return dict(ready=not failures, failures=failures, business_reference=ba, business_incident=bb,
                 rate_ratio=ratio, source_review="manual_review_required")
 
@@ -352,7 +373,8 @@ def collect(directory, *, names=None, repeats=2, duration=15.0, explicit_plan=No
                     bundle = rebuild_pair(entry["windows"], LIMITS)
                     entry.update(snapshot_id=store.freeze(bundle.model_dump(mode="json")),
                                  observations=describe(bundle), valid=True,
-                                 feasibility=assess_case(name, entry["windows"], bundle, cases[name]))
+                                 feasibility=assess_case(name, entry["windows"], bundle, cases[name],
+                                     explicit_plan.localization if explicit_plan else 'none'))
                     entry["source_ablations"] = {
                         "trace_only": store.freeze(mask_sources(bundle.model_dump(mode="json"), runtime=False)),
                         "runtime_only": store.freeze(mask_sources(bundle.model_dump(mode="json"), trace=False))}
@@ -418,7 +440,8 @@ def audit(directory):
                 raise ValueError("load_plan_mismatch")
         if store.read(entry["snapshot_id"]) != bundle.model_dump(mode="json") or entry["observations"] != describe(bundle):
             raise ValueError("bundle_provenance_mismatch")
-        if entry["feasibility"] != assess_case(entry["name"], entry["windows"], bundle, plan["cases"][entry["name"]]):
+        if entry["feasibility"] != assess_case(entry["name"], entry["windows"], bundle, plan["cases"][entry["name"]],
+                plan.get('input_plan', {}).get('localization', 'none')):
             raise ValueError("feasibility_mismatch")
         for name, kwargs in (("trace_only", dict(runtime=False)), ("runtime_only", dict(trace=False))):
             if store.read(entry["source_ablations"][name]) != mask_sources(bundle.model_dump(mode="json"), **kwargs):

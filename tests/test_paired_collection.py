@@ -12,10 +12,12 @@ from fastapi import FastAPI
 
 from backend.investigation.bundle_evidence import RuntimeReading
 from backend.investigation.paired_evidence import TimedReading
-from evals.collect_paired_windows import LIMITS, audit, collect, open_loop, rebuild_window, selected, write
+from evals.collect_paired_windows import LIMITS, audit, collect, open_loop, rebuild_window, selected, write, localization_expectation
 from lab.orders.runtime_observation import initialize, install
 from test_paired_evidence import reading
 from test_window_investigation import observed
+from test_active_investigation import mixed_fixture
+from backend.investigation.paired_evidence import PairedBundleV2
 
 
 def raw_window():
@@ -37,6 +39,26 @@ def raw_window():
 
 
 class PairedCollectionTests(unittest.IsolatedAsyncioTestCase):
+    def test_localization_oracle_reads_raw_request_not_projected_stage(self):
+        bundle = PairedBundleV2.model_validate(mixed_fixture(True))
+        raw = raw_window()
+        target = bundle.incident.trace.requests[0].trace_id
+        raw['raw_traces'][0]['traceID'] = target
+        raw['load']['samples'][0]['trace_id'] = target
+        spans = raw['raw_traces'][0]['spans']
+        spans[0]['duration'] = 800000
+        spans[2]['duration'] = 350000
+        for tag in spans[1]['tags']:
+            if tag['key'] == 'client.pre_send_ms':
+                tag['value'] = 300.
+        expectation = localization_expectation({'incident': raw}, bundle)
+        self.assertEqual(expectation['stage'], 'mixed')
+        self.assertEqual(expectation['trace_id'], target)
+        for tag in spans[1]['tags']:
+            if tag['key'] == 'client.pre_send_ms':
+                tag['value'] = 5.
+        self.assertEqual(localization_expectation({'incident': raw}, bundle)['stage'], 'downstream')
+
     async def test_cutoff_observes_pending_requests_before_drain(self):
         release = asyncio.Event()
         active = 0

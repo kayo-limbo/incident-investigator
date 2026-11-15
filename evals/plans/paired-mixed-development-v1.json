@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "split": "development",
+  "duration": 6,
+  "repeats": 2,
+  "localization": "mixed_slowest",
+  "cases": {"downstream": [[60, 3, 11], [300, 3, 11]]}
+}

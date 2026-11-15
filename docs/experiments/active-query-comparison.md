@@ -54,6 +54,14 @@ python -m evals.run_active_comparison audit .snapshots/active-comparison-2026111
 
 ## 下一步
 
+2026-11-15真实混合场景验收：新增`evals/plans/paired-mixed-development-v1.json`，仅development/downstream，参考/事件保持池3、11请求/秒，下游延迟60→300ms，每窗口6秒、两次重复；每窗口66次业务请求、按既定哈希抽样40条Trace。`localization=mixed_slowest`要求窗口P95呈mixed且最慢采样请求也呈mixed；原有采集阈值不放宽。原始Trace经`observe_trace`验证后独立提取局部阶段，不调用调查状态机的`stage()`；预期值只用于评测，不传入策略上下文。
+
+实际2/2采集有效、2/2准入、2/2离线重建通过，默认配置与业务恢复验证通过。两次事件库存P95为302.664/302.253ms，发送前P95为622.416/624.296ms；入口速率比1.001884/1.000592，业务失败均为0。最慢采样请求的库存/发送前耗时分别为302.664/645.911ms和301.978/680.112ms。固定策略均用6次工具完成downstream_change及mixed局部定位，通过正式`score`的类别、状态重建与独立局部预期核对。这里mixed表示同请求两种延迟，不表示注入了两个独立故障。
+
+采集目录`.snapshots/paired-mixed-20261115-development-v1`；两轮固定回放保存在`.snapshots/mixed-localization-20261115-replay.private.json`。正式冻结目录`.snapshots/active-mixed-20261115-offline-v1`按预定repeat=0纳入1个样本，fixed 1/1通过，三个模型变体均未开始；使用offline-only配置，没有真实模型调用。29项主线与38项paired相关测试通过。原始产物留在本地，不提交。
+
+复核命令：`python -m evals.collect_paired_windows audit .snapshots/paired-mixed-20261115-development-v1`；`python -m evals.run_active_comparison audit .snapshots/active-mixed-20261115-offline-v1`。需对应冻结源码，不能以源码变更后的audit冒充原批复核。真实样本仅覆盖同请求并存延迟；不同请求承载不同延迟仍只有合成验收。新增充分性要求会增加一次查询，当前结果是工程机制的真实场景验收，**不是主动策略收益或泛化证据**。下一步在明确调用范围后另建模型配置冻结批次，不把offline-only批次直接改配置续跑。
+
 2026-11-14局部下钻验收：mixed窗口增加最慢采样请求定位缺口，分别构造同请求并存两种延迟、不同请求承载两种延迟的合成快照，窗口阶段均为mixed，目标请求阶段分别为mixed/downstream。下钻补齐的是单请求定位，不证明总体联合分布或根因；这是v3新增报告要求，不能将额外调用包装为效率提升。固定/react/active/active_no_scoring在正式`score`端到端重放中均用6次调用完成合成任务，局部结果一致；错请求、预算不足与局部结果篡改均有约束覆盖。原有合成路径差异用例显式设置无发送前等待，保留其只检验复合分类的范围。
 
 现有8个开发视图以fixed及两个候选首选脚本策略回放，共24/24通过类别/协议验收；各视图工具数仍为3、5、5、5、3、5、4、2，均不触发mixed局部定位。没有真实模型调用，脚本token为测试值，不计入实测用量。主线29项测试通过：`python -m unittest discover -s tests -p 'test_active*.py' -v`。现阶段只能声称局部证据闭环已实现并经合成验收；下一步先准备mixed的真实开发采集条件和独立局部验收，确认必要性后再冻结同预算模型对照，保留集继续后置。

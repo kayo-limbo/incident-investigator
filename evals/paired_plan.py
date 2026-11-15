@@ -11,6 +11,7 @@ class CollectionPlan(BaseModel):
     split: Literal["development", "heldout"]
     duration: float = Field(ge=1, le=30, allow_inf_nan=False)
     repeats: int = Field(strict=True, ge=1, le=3)
+    localization: Literal['none', 'mixed_slowest'] = 'none'
     cases: dict[str, tuple[tuple[StrictInt, StrictInt, StrictInt], tuple[StrictInt, StrictInt, StrictInt]]]
 
     @model_validator(mode="after")
@@ -18,6 +19,8 @@ class CollectionPlan(BaseModel):
         allowed = {"stable", "downstream", "capacity", "arrival", "restart", "compound"}
         if not self.cases or not set(self.cases) <= allowed:
             raise ValueError("unknown_or_empty_cases")
+        if self.localization != 'none' and (self.split != 'development' or set(self.cases) != {'downstream'}):
+            raise ValueError('localization_requires_downstream_development')
         for name, (a, b) in self.cases.items():
             for delay, pool, rate in (a, b):
                 if not (0 <= delay <= 1000 and 1 <= pool <= 100 and 1 <= rate <= 100 and
