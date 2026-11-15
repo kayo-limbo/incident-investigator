@@ -2,11 +2,13 @@
 
 ## 2026-11-15 mixed-localization开发套件
 
+本套件已完成一次明确授权的真实模型小批：实际13/15次请求、19,386 token；fixed、active、active_no_scoring通过，react因下钻缺失window被拒绝，未重试。四份报告离线审计通过，完整结果见[混合场景对照](../experiments/active-query-comparison.md)。此前offline-only批次未改配置，新模型批次独立冻结。本轮授权已用完，不延伸到后续实验。
+
 采集输入计划声明`localization=mixed_slowest`时，正式入口冻结`mixed-localization`套件：只选择downstream的repeat=0完整视图，不替换未通过样本，不加入来源消融。默认原套件仍为原8个视图。新采集计划限制为development/downstream；原计划缺省`localization=none`。采集与audit均重算mixed窗口和最慢采样请求准入条件。
 
 freeze从原始Trace独立计算`expected_localization`（请求ID、阶段、范围），与快照一同冻结为评测数据。score先逐步重建报告，再要求局部状态observed且匹配这些预期，输出`localization_accepted`；类别正确但局部验收失败不算通过。该预期不进入Agent上下文。采集器和执行器仍复用底层原始Trace解析，因此这不是独立遥测或通用语义验证。
 
-沿用原入口：`python -m evals.collect_paired_windows collect .snapshots/NEW_MIXED --plan evals/plans/paired-mixed-development-v1.json`，然后`python -m evals.run_active_comparison freeze .snapshots/NEW_RUN --source .snapshots/NEW_MIXED`及`fixed`/`audit`。models仍需单独明确授权；当前真实采集结果只完成离线fixed验收。小套件每变体1次，三种模型变体最多15次请求，其余单次预算不变；不能套用原24次调查的授权。
+沿用原入口：`python -m evals.collect_paired_windows collect .snapshots/NEW_MIXED --plan evals/plans/paired-mixed-development-v1.json`，然后`python -m evals.run_active_comparison freeze .snapshots/NEW_RUN --source .snapshots/NEW_MIXED`及`fixed`/`audit`。models仍需单独明确授权。小套件每变体1次，三种模型变体最多15次请求，其余单次预算不变；不能套用原24次调查的授权。
 
 2026-11-12：新增`evals/run_active_comparison.py`。这是开发集协议验收与查询选择对照，不是模型独立根因诊断或泛化评测。诊断和停止继续使用035共同规则。
 
