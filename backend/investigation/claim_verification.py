@@ -6,6 +6,7 @@ P95 uses the summary tool's nearest-rank statistic over observed non-null values
 from typing import Literal
 from decimal import Decimal, ROUND_HALF_UP
 import re
+import hashlib
 
 from pydantic import Field, model_validator
 
@@ -108,3 +109,69 @@ def _matches(claim, expected, digits):
         return round(claim.value, 3) == round(expected, 3)
     quantum = Decimal(1).scaleb(-digits)
     return Decimal(str(expected)).quantize(quantum, rounding=ROUND_HALF_UP) == Decimal(str(claim.value))
+
+
+class ClaimBinding(Strict):
+    """Character offsets in the exact UTF-8-hashed report supplied by the caller."""
+    report_sha256: str = Field(pattern=r'^[0-9a-f]{64}$')
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    quote: str = Field(min_length=1, max_length=1000)
+    claim: StatisticalClaim
+
+
+_BOUND_P95 = re.compile(
+    r'(?P<source>事件窗口采样|参考窗口采样|事件告警记录)'
+    r'(?P<metric>订单|库存|发送前|客户端)\s*P95\s*'
+    r'(?P<relation>约|为|=)\s*(?P<number>(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?)\s*ms[。.!！]?')
+_BOUND_METRICS = dict(订单='orders_ms', 库存='inventory_ms',
+                      发送前='pre_send_ms', 客户端='client_elapsed_ms')
+
+
+def verify_bound_claim(binding, *, report_text, snapshot_id, evidence):
+    """Conservative controlled-sentence binding followed by evidence verification.
+
+    The trusted caller supplies report_text and acquired evidence, not the
+    candidate. Unsupported prose is NOT a false statement or an accepted report.
+    This API checks one complete standalone sentence, not report completeness.
+    """
+    binding = ClaimBinding.model_validate(binding)
+
+    def rejected(reason):
+        return dict(protocol='claim-binding-v1', binding_status='unverified', reason=reason,
+                    verification=None)
+
+    if hashlib.sha256(report_text.encode('utf-8')).hexdigest() != binding.report_sha256:
+        return rejected('report_hash_mismatch')
+    if binding.end > len(report_text) or report_text[binding.start:binding.end] != binding.quote:
+        return rejected('source_span_mismatch')
+    # Do not take a positive fragment out of a negation, condition or comparison.
+    # Only line boundaries and explicit Chinese sentence delimiters are accepted.
+    before = report_text[:binding.start].rstrip(' \t')
+    after = report_text[binding.end:].lstrip(' \t')
+    if before and before[-1] not in '\n。！？':
+        return rejected('incomplete_sentence')
+    if after and after[0] != '\n' and binding.quote[-1] not in '。！？':
+        return rejected('incomplete_sentence')
+    match = _BOUND_P95.fullmatch(binding.quote)
+    if match is None:
+        return rejected('unsupported_expression')
+    source = match['source']
+    alert = source == '事件告警记录'
+    expected = dict(
+        window='reference' if source == '参考窗口采样' else 'incident',
+        metric=_BOUND_METRICS[match['metric']],
+        statistic='reported_p95' if alert else 'p95',
+        population='alert_record' if alert else 'observed_non_null',
+        method='reported' if alert else 'nearest_rank', trace_id=None,
+        approximation=('约'+match['number']+'ms') if match['relation']=='约' else None)
+    claim = binding.claim
+    # Compare precision lexically as well as magnitude. 362.080 != "约362.08".
+    actual = claim.model_dump()
+    if (any(actual[k] != v for k,v in expected.items()) or
+            Decimal(str(claim.value)) != Decimal(match['number'])):
+        return rejected('claim_text_mismatch')
+    checked = verify_claim(claim, snapshot_id=snapshot_id, evidence=evidence)
+    return dict(protocol='claim-binding-v1', binding_status='bound', reason='literal_fields_match',
+                report_sha256=binding.report_sha256, start=binding.start, end=binding.end,
+                quote=binding.quote, verification=checked)

@@ -27,6 +27,53 @@ def mixed_fixture(together):
 
 
 class ActiveTests(unittest.TestCase):
+    def test_bound_claim_keeps_source_scope_precision_and_complete_sentence(self):
+        import hashlib
+        from backend.investigation.claim_verification import verify_bound_claim
+        value = fixture('downstream')
+        for row in value['incident']['trace']['requests']:
+            row.update(orders_ms=362.079, inventory_ms=352.727)
+        run = self.run_state(value)
+        summary = run.execute(plan('get_window_summary', 'incident'))
+        claim = dict(snapshot_id=run.snapshot_id, evidence_id=summary['id'], window='incident',
+                     metric='orders_ms', statistic='p95', population='observed_non_null',
+                     method='nearest_rank', value=362.08, unit='ms', approximation='约362.08ms')
+        quote = '事件窗口采样订单 P95约362.08ms。'
+        text = '调查摘要。\n' + quote + '\n未检查因果。'
+        binding = dict(report_sha256=hashlib.sha256(text.encode()).hexdigest(),
+                       start=text.index(quote), end=text.index(quote)+len(quote), quote=quote, claim=claim)
+        before = run.report(), run.remaining
+        def check(b=binding, report=text):
+            return verify_bound_claim(b, report_text=report, snapshot_id=run.snapshot_id, evidence=run.evidence)
+        self.assertEqual(check()['verification']['status'], 'supported')
+        for changed in ({'metric':'inventory_ms'}, {'window':'reference'}, {'value':362.080,'approximation':'约362.080ms'},
+                        {'approximation':None}, {'value':362.09,'approximation':'约362.09ms'},
+                        {'statistic':'reported_p95','population':'alert_record','method':'reported'}):
+            with self.subTest(changed=changed):
+                self.assertEqual(check(dict(binding,claim=dict(claim,**changed)))['reason'], 'claim_text_mismatch')
+        self.assertEqual(check(report=text+'改动')['reason'], 'report_hash_mismatch')
+        self.assertEqual(check(dict(binding,start=binding['start']+1))['reason'], 'source_span_mismatch')
+        self.assertEqual(check(dict(binding,quote=quote.replace('订单','库存')))['reason'], 'source_span_mismatch')
+        for prefix in ('并非', '如果', '假设：'):
+            modified = prefix+quote
+            fragment = dict(binding,report_sha256=hashlib.sha256(modified.encode()).hexdigest(),
+                            start=len(prefix),end=len(modified))
+            self.assertEqual(check(fragment,modified)['reason'], 'incomplete_sentence')
+        unsupported = '事件窗口采样订单P95低于250ms。'
+        b = dict(binding,report_sha256=hashlib.sha256(unsupported.encode()).hexdigest(),
+                 start=0,end=len(unsupported),quote=unsupported)
+        self.assertEqual(check(b,unsupported)['reason'], 'unsupported_expression')
+        wrong = '事件窗口采样库存P95为352.213ms。'
+        b = dict(binding,report_sha256=hashlib.sha256(wrong.encode()).hexdigest(),start=0,end=len(wrong),quote=wrong,
+                 claim=dict(claim,metric='inventory_ms',value=352.213,approximation=None))
+        self.assertEqual(check(b,wrong)['verification']['status'], 'contradicted')
+        alert = '事件告警记录客户端P95为'+str(value['alert']['client_p95_ms'])+'ms。'
+        b = dict(binding,report_sha256=hashlib.sha256(alert.encode()).hexdigest(),start=0,end=len(alert),quote=alert,
+                 claim=dict(claim,evidence_id='e0',metric='client_elapsed_ms',statistic='reported_p95',
+                            population='alert_record',method='reported',value=value['alert']['client_p95_ms'],approximation=None))
+        self.assertEqual(check(b,alert)['verification']['scope'], 'reported_alert_only')
+        self.assertEqual((run.report(),run.remaining),before)
+
     def test_natural_report_rounding_regression_keeps_wrong_inventory_rejected(self):
         value = fixture('downstream')
         for row in value['incident']['trace']['requests']:
