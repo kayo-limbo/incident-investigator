@@ -25,7 +25,7 @@ A已完成一个定向P95单例，见[结果](../experiments/bundle-comparison.m
 
 借鉴[Ragas Faithfulness](https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/faithfulness/)拆原子主张并逐条检查支持关系的思路，增加本项目统计与作用域约束；当前仅参考文档，尚未采用源码或引入依赖。采用代码前固定commit并检查许可证。语义验证需用独立标签校准，不能以模型自评分数证明效果。
 
-2026-11-17阶段C首轮已完成构造主张开发对照，见[54条主张的结果与限制](../experiments/active-query-comparison.md#2026-11-17-结构化统计主张首轮冻结对照)。后续已冻结12份历史自然报告并人工核对13条定量P95主张；7条人工转换诊断拦错1条、误拒正确舍入1条，原生旧报告适配及自动提取尚未实现。见[自然报告审计](../experiments/bundle-comparison.md#后续12份自然报告的定量p95审计)。下一步补近似精度与告警来源表达，使用新版本保留当前失败，不立即进入语义验证或多Agent。
+2026-11-17阶段C首轮已完成构造主张开发对照，见[54条主张的结果与限制](../experiments/active-query-comparison.md#2026-11-17-结构化统计主张首轮冻结对照)。自然报告审计发现的近似误拒和告警来源缺口已由v2修复，同开发样本人工提取回放保留11/11条正确主张、拦截1/1条错误，另1条不等式未支持；旧误拒结果保留。见[v2回放及边界](../experiments/bundle-comparison.md#v2修复回放近似表达和告警归属)。下一步定义主张提取与原文绑定验收，再决定自动流程接入，不立即进入语义验证或多Agent。
 
 ### 亮点三：仅做准入判断
 

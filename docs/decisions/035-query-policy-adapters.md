@@ -1,5 +1,15 @@
 # 同工具、同停止协议的查询策略适配
 
+## 2026-11-17 统计主张v2：近似精度与告警归属
+
+当前验证结果协议升级为`statistical-claim-v2`，调查报告仍为v3且停止条件不变。新增可选`approximation`，必须保留原文中的“约+带1—3位小数的数值+ms”（允许空格），数值必须与`value`一致；由该字面值的小数位确定精度，使用十进制ROUND_HALF_UP核对证据值。无近似标记仍沿用v1三位小数比较，不开放任意容差、整数近似或科学计数法。调用方须保证该片段确实来自原文；Schema仅核对片段与数值的一致性，不能证明提取忠实性，尚无自动提取。
+
+新增`statistic=reported_p95`、`population=alert_record`、`method=reported`组合，只接受已获取的`get_alert`与incident作用域。`metric=client_elapsed_ms`只读取`client_p95_ms`；`orders_ms`只读取显式`orders_p95_ms`，不将客户端耗时冒充服务端订单耗时。允许读取已获取历史告警的`data.alert`封装，但不改旧执行器或推断未知字段。缺少对应指标返回证据不足；参考窗口、未知引用、全量外推和其他指标不构成支持。
+
+告警核验结果`scope=reported_alert_only`，只证明告警记录了该值，不证明Trace充分、全部流量或因果结论。请求/样本结果为`observed_evidence`。例如Trace缺失时仍可核对“告警记录客户端P95约383.7ms”，不可借此支持“采样订单P95为383.7ms”。
+
+16项执行器专项、35项active主线回归通过；覆盖真实舍入误拒、错误库存值仍被拒绝、近似片段不一致/任意容差拒绝、缺Trace告警归属及客户端/服务端指标隔离。开发回放见[自然报告修复验收](../experiments/bundle-comparison.md#v2修复回放近似表达和告警归属)。旧v1冻结结果保留，必须使用对应归档源码复现；新源码不续跑旧批次。
+
 ## 2026-11-17 结构化统计主张验证（独立只读接口）
 
 `ActiveInvestigation.verify_claim(claim)`接入`claim_verification.py`，只读当前调查已获取的证据，返回`statistical-claim-v1`结果：`status`为`supported`、`contradicted`或`insufficient_evidence`，附`reason`、`expected_value`和原主张。不读取私有快照、不调用模型或工具、不修改调查状态/预算，也不改变原v3报告、停止条件与诊断。当前未接模型输出解析、报告发布拦截或正式冻结对照；不能宣称自动拦截自然语言报告。

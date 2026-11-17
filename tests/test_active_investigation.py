@@ -27,6 +27,52 @@ def mixed_fixture(together):
 
 
 class ActiveTests(unittest.TestCase):
+    def test_natural_report_rounding_regression_keeps_wrong_inventory_rejected(self):
+        value = fixture('downstream')
+        for row in value['incident']['trace']['requests']:
+            row.update(orders_ms=362.079, inventory_ms=352.727)
+        run = self.run_state(value)
+        summary = run.execute(plan('get_window_summary', 'incident'))
+        claim = dict(snapshot_id=run.snapshot_id, evidence_id=summary['id'], window='incident',
+                     metric='orders_ms', statistic='p95', population='observed_non_null',
+                     method='nearest_rank', value=362.08, unit='ms', approximation='约362.08ms')
+        before = run.report(), run.remaining
+        self.assertEqual(run.verify_claim(claim)['status'], 'supported')
+        self.assertEqual(run.verify_claim(dict(claim, approximation=None))['status'], 'contradicted')
+        self.assertEqual(run.verify_claim(dict(claim, value=362.07, approximation='约362.07ms'))['status'], 'contradicted')
+        self.assertEqual(run.verify_claim(dict(claim, metric='inventory_ms', value=352.213,
+                                              approximation=None))['status'], 'contradicted')
+        for changes in ({'approximation': '约362.1ms'}, {'approximation': '362.08ms'},
+                        {'approximation': '约362ms'}, {'decimal_places': 0}, {'tolerance': 10}):
+            with self.assertRaises(ValueError):
+                run.verify_claim(dict(claim, **changes))
+        self.assertEqual((run.report(), run.remaining), before)
+
+    def test_alert_attribution_without_trace_does_not_claim_trace_or_server_measurement(self):
+        from backend.investigation.claim_verification import verify_claim
+        value = mask_sources(fixture(), trace=False)
+        value['alert']['client_p95_ms'] = 383.741
+        run = self.run_state(value)
+        claim = dict(snapshot_id=run.snapshot_id, evidence_id='e0', window='incident',
+                     metric='client_elapsed_ms', statistic='reported_p95', population='alert_record',
+                     method='reported', value=383.7, unit='ms', approximation='约383.7ms')
+        before = run.report(), run.remaining
+        result = run.verify_claim(claim)
+        self.assertEqual((result['status'], result['scope']), ('supported', 'reported_alert_only'))
+        self.assertEqual(run.verify_claim(dict(claim, metric='orders_ms'))['reason'], 'metric_unavailable')
+        self.assertEqual(run.verify_claim(dict(claim, window='reference'))['status'], 'insufficient_evidence')
+        self.assertEqual(run.verify_claim(dict(claim, evidence_id='missing'))['status'], 'insufficient_evidence')
+        # Historical acquired alert envelope: attribution only, no synthetic summary.
+        old = [dict(id='old-alert', tool='get_alert', data={'alert': {'orders_p95_ms': 383.741}})]
+        old_claim = dict(claim, evidence_id='old-alert', metric='orders_ms')
+        self.assertEqual(verify_claim(old_claim, snapshot_id=run.snapshot_id, evidence=old)['status'], 'supported')
+        self.assertEqual(verify_claim(dict(old_claim, value=383.6, approximation='约383.6ms'),
+                                     snapshot_id=run.snapshot_id, evidence=old)['status'], 'contradicted')
+        for changes in ({'population': 'all_traffic'}, {'method': 'nearest_rank'}, {'metric': 'inventory_ms'}):
+            with self.assertRaises(ValueError):
+                run.verify_claim(dict(claim, **changes))
+        self.assertEqual((run.report(), run.remaining), before)
+
     def test_statistical_claim_verification_and_scope(self):
         # Distinct requests own the two P95s; nearest-rank is not max at n=20.
         value = fixture('downstream')
