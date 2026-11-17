@@ -11,7 +11,7 @@ from backend.investigation.paired_evidence import PairedBundleV2, mask_sources
 from backend.investigation.snapshot_store import SnapshotStore
 from backend.investigation.active_policies import wrap_query, investigate_policy
 from test_active_policies import Scripted, QUERIES
-from evals.run_active_comparison import freeze, validate, evaluate, summarize, score, CASES
+from evals.run_active_comparison import freeze, validate, evaluate, summarize, score, CASES, freeze_claims, compare_claims
 from test_paired_investigation import fixture
 from test_active_investigation import mixed_fixture
 
@@ -39,6 +39,35 @@ class ComparisonTests(unittest.IsolatedAsyncioTestCase):
     def freeze(self):
         with patch('evals.run_active_comparison.rebuild_pair', side_effect=lambda w, l: PairedBundleV2.model_validate(self.payloads[w['fixture']])):
             return freeze(self.root, self.destination, self.config)
+
+    def test_claims_frozen_paired_comparison_replay_and_tampering(self):
+        path = self.root / 'collection.private.json'
+        manifest = json.loads(path.read_text(encoding='utf-8'))
+        for case in manifest['cases']:
+            case['repeat'] = 1
+        path.write_text(json.dumps(manifest), encoding='utf-8')
+        with patch('evals.run_active_comparison.rebuild_pair', side_effect=lambda w, l: PairedBundleV2.model_validate(self.payloads[w['fixture']])):
+            frozen = freeze_claims(self.root, self.destination)
+        self.assertEqual(frozen['claims'], 54)
+        result = compare_claims(self.destination)
+        baseline, checked = (result['metrics'][v] for v in ('reference_only', 'statistical'))
+        self.assertEqual(baseline['false_accepts'], dict(count=18, total=18))
+        self.assertEqual(checked['false_accepts'], dict(count=0, total=18))
+        self.assertEqual(checked['false_rejections'], dict(count=0, total=18))
+        self.assertEqual(checked['unsupported_accepts'], dict(count=0, total=18))
+        self.assertTrue(compare_claims(self.destination, audit=True)['audited'])
+        with self.assertRaises(FileExistsError):
+            compare_claims(self.destination)
+        output = self.destination / 'claims-result.private.json'
+        saved = json.loads(output.read_text(encoding='utf-8'))
+        saved['rows'][0]['accepted'] = False
+        output.write_text(json.dumps(saved), encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'claim_result_mismatch'):
+            compare_claims(self.destination, audit=True)
+        plan = self.destination / 'plan.private.json'
+        plan.write_bytes(plan.read_bytes() + b' ')
+        with self.assertRaisesRegex(ValueError, 'plan_digest_mismatch'):
+            compare_claims(self.destination, audit=True)
 
     async def test_freeze_fixed_replay_audit_and_no_overwrite(self):
         plan = self.freeze()

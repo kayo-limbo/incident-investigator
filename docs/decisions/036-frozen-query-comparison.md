@@ -55,3 +55,20 @@ python -m evals.run_active_comparison audit .snapshots/NEW_RUN
 ## 授权后的实际执行
 
 2026-11-12完成全部24次模型调查，未重试4次协议失败，未改变冻结代码、提示、预算或输入。固定8/8、react 7/8、active 6/8、active_no_scoring 7/8通过类别/协议验收。实际71次请求、89,957 token，未知用量和未知中断均为0。32份报告全部通过独立逐步重建，审计前后报告和started标记哈希不变。结果与限制见 [实测记录](../experiments/active-query-comparison.md)。此前359项测试是执行准备验证；此次仅运行冻结实验与离线审计，未新增代码或重复全量测试。
+# 结构化主张离线对照补充（2026-11-17）
+
+正式入口增加`freeze-claims`、`claims`、`audit-claims`，不读取模型配置、不发起模型请求。与查询策略批次分目录冻结，沿用计划哈希、内容寻址快照、源码归档、逐条结果与只读重放核对；结果独占写入，不覆盖既有结果。源码或计划变化后不能续跑原批次。
+
+固定选择原六类开发采集的repeat=1完整视图。每份快照对订单、库存、发送前耗时构造三种主张：正确样本P95、数值加1ms的错误P95、将样本统计推广到全部流量；共6次采集54条主张。所有主张均标为constructed，不是自然模型输出，也不是历史错误发生率。repeat=1此前参与过路径审计，因此不能称作独立保留集。
+
+冻结阶段先从源窗口重建配对快照并核对内容，再在评测代码中独立排序各指标非空值、按ceil(0.95*n)取值形成标签；不调用生产statistics或验证器生成标签。该标签独立于验证器，但仍依赖共同的观测投影，不代表对原始遥测全链路的独立认证。运行时只向验证器传入主张和已获取证据，不传标签。
+
+两种方案共享每份快照的告警与事件摘要（每份2次工具，共12次）：reference_only检查已获取的同窗口来源和指标存在；statistical额外检查统计值与样本范围。前者是明确受限的引用基线，不代表最强语义规则，也不是重跑旧自然语言报告验收。每条保存预期标签、接受结果及统计验证原因；分开报告矛盾主张放行、证据不足主张放行、正确主张误拒、正确主张保留、全部接受数，均为计数/分母。两种方案额外模型/工具调用均0，不由此声称CPU开销为0；本轮不作延迟比较或修正实验。
+
+```powershell
+.\.venv\Scripts\python.exe -m evals.run_active_comparison freeze-claims .snapshots/NEW_CLAIMS --source .snapshots/paired-20261109-development-v1
+.\.venv\Scripts\python.exe -m evals.run_active_comparison claims .snapshots/NEW_CLAIMS
+.\.venv\Scripts\python.exe -m evals.run_active_comparison audit-claims .snapshots/NEW_CLAIMS
+```
+
+以下为历史查询策略协议，不覆盖本节主张对照的范围。

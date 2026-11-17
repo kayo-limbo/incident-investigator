@@ -3,10 +3,12 @@ import argparse
 import asyncio
 import hashlib
 import json
+import math
 import zipfile
 from pathlib import Path
 
 from backend.investigation.active_investigation import ActiveInvestigation
+from backend.investigation.claim_verification import verify_claim
 from backend.investigation.active_policies import ActivePlanModel, ReactQueryModel, PolicyCancelled, investigate_policy, fixed_query, wrap_query
 from backend.investigation.model import ModelConfig
 from backend.investigation.paired_evidence import mask_sources
@@ -224,14 +226,136 @@ def summarize(directory):
     return dict(protocol=plan['protocol'], rows=rows, limitations='开发集查询策略协议验收；不是模型自主诊断或泛化成绩。')
 
 
+def freeze_claims(root, destination):
+    """Preselect repeat=1 of the six original DEVELOPMENT collections.
+
+    Claims are constructed mechanism probes, not natural model outputs. Labels
+    are computed by independent sorting, never by the verifier under evaluation.
+    """
+    raw = (root / 'collection.private.json').read_bytes()
+    source_plan = json.loads((root / 'plan.private.json').read_text(encoding='utf-8'))
+    manifest = json.loads(raw)
+    if source_plan['split'] != 'development' or not manifest['completed'] or not manifest['recovery']['verified']:
+        raise ValueError('development_collection_required')
+    source_store = SnapshotStore(root / 'snapshots')
+    samples, payloads = [], {}
+    for name in CASES:
+        entries = [c for c in manifest['cases'] if c['name'] == name and c['repeat'] == 1]
+        if len(entries) != 1 or not entries[0]['valid'] or not entries[0]['feasibility']['ready']:
+            raise ValueError('preselected_case_unavailable')
+        case = entries[0]
+        payload = rebuild_pair(case['windows'], source_plan['limits']).model_dump(mode='json')
+        key = case['snapshot_id']
+        if payload != source_store.read(key):
+            raise ValueError('source_provenance_mismatch')
+        claims = []
+        for metric in ('orders_ms', 'inventory_ms', 'pre_send_ms'):
+            values = sorted(r[metric] for r in payload['incident']['trace']['requests'] if r[metric] is not None)
+            if len(values) < 5 or payload['incident']['trace']['quality'] != 'observed':
+                raise ValueError('statistics_not_observed')
+            expected = values[math.ceil(.95 * len(values)) - 1]
+            base = dict(snapshot_id=key, evidence_id='e1', window='incident', metric=metric,
+                        statistic='p95', population='observed_non_null', method='nearest_rank',
+                        value=expected, unit='ms')
+            for kind, change, label in (
+                ('correct', {}, 'supported'),
+                ('wrong_value', {'value': expected + 1.0}, 'contradicted'),
+                ('population_overreach', {'population': 'all_traffic'}, 'insufficient_evidence')):
+                claims.append(dict(id=metric + ':' + kind, origin='constructed', claim={**base, **change},
+                                   expected_status=label, oracle_value=expected))
+        samples.append(dict(name=name, repeat=1, snapshot_id=key, claims=claims))
+        payloads[key] = payload
+    destination.mkdir(parents=True, exist_ok=False)
+    store = SnapshotStore(destination / 'snapshots')
+    for key, payload in payloads.items():
+        assert store.freeze(payload) == key
+    source = sources()
+    plan = dict(protocol='active-claims-development-v1', split='development', samples=samples,
+                variants=['reference_only', 'statistical'], budget=BUDGET,
+                source_manifest_sha256=digest(raw),
+                source_plan_sha256=digest((root / 'plan.private.json').read_bytes()),
+                source_hashes={p: digest(b) for p, b in source.items()},
+                limitations='Constructed probes on previously inspected development collections; no heldout or model-quality claim.')
+    dump(destination / 'plan.private.json', plan)
+    (destination / 'plan.sha256').write_text(digest((destination / 'plan.private.json').read_bytes()), encoding='ascii')
+    with zipfile.ZipFile(destination / 'protocol-sources.zip', 'x') as archive:
+        for name, content in source.items():
+            archive.writestr(name, content)
+    return dict(protocol=plan['protocol'], collections=len(samples), claims=sum(len(s['claims']) for s in samples))
+
+
+def compare_claims(directory, *, audit=False):
+    raw = (directory / 'plan.private.json').read_bytes()
+    if digest(raw) != (directory / 'plan.sha256').read_text(encoding='ascii'):
+        raise ValueError('plan_digest_mismatch')
+    plan = json.loads(raw)
+    if (plan['protocol'] != 'active-claims-development-v1' or plan['split'] != 'development' or
+            plan['budget'] != BUDGET or plan['variants'] != ['reference_only', 'statistical'] or
+            [(s['name'], s['repeat']) for s in plan['samples']] != [(n, 1) for n in CASES] or
+            plan['source_hashes'] != {p: digest(b) for p, b in sources().items()}):
+        raise ValueError('frozen_protocol_changed')
+    with zipfile.ZipFile(directory / 'protocol-sources.zip') as archive:
+        if {p: digest(archive.read(p)) for p in archive.namelist()} != plan['source_hashes']:
+            raise ValueError('archive_mismatch')
+    store, rows = SnapshotStore(directory / 'snapshots'), []
+    for sample in plan['samples']:
+        run = ActiveInvestigation(store, sample['snapshot_id'], BUDGET['budget'])
+        run.execute(wrap_query(dict(tool='get_window_summary', window='incident')))
+        before = run.report()
+        for item in sample['claims']:
+            claim = item['claim']
+            # A deliberately limited reference-validity baseline: checks acquired
+            # source, window and field existence, not numeric entailment/population.
+            refs = [e for e in run.evidence if e['id'] == claim['evidence_id']]
+            linked = (claim['snapshot_id'] == run.snapshot_id and len(refs) == 1 and
+                      refs[0].get('query', {}).get('window') == claim['window'] and
+                      claim['metric'] in (refs[0]['data'].get('statistics') or {}))
+            checked = verify_claim(claim, snapshot_id=run.snapshot_id, evidence=run.evidence)
+            for variant, accepted in (('reference_only', linked), ('statistical', checked['status'] == 'supported')):
+                rows.append(dict(sample=sample['name'], claim_id=item['id'], origin=item['origin'],
+                                 expected_status=item['expected_status'], variant=variant, accepted=accepted,
+                                 verification=checked if variant == 'statistical' else None))
+        if run.report() != before:
+            raise ValueError('verification_mutated_state')
+    metrics = {}
+    for variant in plan['variants']:
+        subset = [r for r in rows if r['variant'] == variant]
+        good = [r for r in subset if r['expected_status'] == 'supported']
+        bad = [r for r in subset if r['expected_status'] == 'contradicted']
+        unknown = [r for r in subset if r['expected_status'] == 'insufficient_evidence']
+        metrics[variant] = dict(
+            false_accepts=dict(count=sum(r['accepted'] for r in bad), total=len(bad)),
+            false_rejections=dict(count=sum(not r['accepted'] for r in good), total=len(good)),
+            unsupported_accepts=dict(count=sum(r['accepted'] for r in unknown), total=len(unknown)),
+            supported_answers=dict(count=sum(r['accepted'] for r in good), total=len(good)),
+            answered_claims=dict(count=sum(r['accepted'] for r in subset), total=len(subset)),
+            model_calls=0, additional_tool_calls=0)
+    result = dict(protocol=plan['protocol'], plan_sha256=digest(raw), rows=rows, metrics=metrics,
+                  collections=len(plan['samples']), shared_acquisition_tool_calls=2 * len(plan['samples']),
+                  limitations=plan['limitations'])
+    output = directory / 'claims-result.private.json'
+    if audit:
+        if json.loads(output.read_text(encoding='utf-8')) != result:
+            raise ValueError('claim_result_mismatch')
+    else:
+        dump(output, result)
+    return dict(protocol=result['protocol'], collections=result['collections'], metrics=metrics, audited=audit)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('freeze', 'fixed', 'models', 'audit'))
+    parser.add_argument('mode', choices=('freeze', 'fixed', 'models', 'audit', 'freeze-claims', 'claims', 'audit-claims'))
     parser.add_argument('directory', type=Path)
     parser.add_argument('--source', type=Path)
     parser.add_argument('--authorized-model-calls', action='store_true', help='仅在用户明确授权本批观测外发与费用后使用')
     args = parser.parse_args()
-    if args.mode == 'freeze':
+    if args.mode == 'freeze-claims':
+        if args.source is None:
+            parser.error('freeze-claims requires --source')
+        result = freeze_claims(args.source, args.directory)
+    elif args.mode in ('claims', 'audit-claims'):
+        result = compare_claims(args.directory, audit=args.mode == 'audit-claims')
+    elif args.mode == 'freeze':
         if args.source is None:
             parser.error('freeze requires --source')
         result = freeze(args.source, args.directory, ModelConfig.from_env())
