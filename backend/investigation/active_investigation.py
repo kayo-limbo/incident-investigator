@@ -269,6 +269,11 @@ class ActiveInvestigation:
                          '同一工具单位费用不等于相同token或实际查询成本。',
                          '支持观测变化不证明唯一因果，样本摘要不代表全量。']))
 
+    def verify_claim(self, claim):
+        """Read-only verification; never queries evidence or changes budgets."""
+        from .claim_verification import verify_claim
+        return verify_claim(claim, snapshot_id=self.snapshot_id, evidence=self.evidence)
+
 
 def run_reference(store, key, budget=6):
     run = ActiveInvestigation(store, key, budget)

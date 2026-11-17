@@ -1,5 +1,24 @@
 # 同工具、同停止协议的查询策略适配
 
+## 2026-11-17 结构化统计主张验证（独立只读接口）
+
+`ActiveInvestigation.verify_claim(claim)`接入`claim_verification.py`，只读当前调查已获取的证据，返回`statistical-claim-v1`结果：`status`为`supported`、`contradicted`或`insufficient_evidence`，附`reason`、`expected_value`和原主张。不读取私有快照、不调用模型或工具、不修改调查状态/预算，也不改变原v3报告、停止条件与诊断。当前未接模型输出解析、报告发布拦截或正式冻结对照；不能宣称自动拦截自然语言报告。
+
+主张字段：`snapshot_id`、`evidence_id`、`window`（reference/incident）、`metric`（orders_ms/inventory_ms/pre_send_ms）、`statistic`（p95/request_value）、`population`（observed_non_null/request/all_traffic）、`method`（nearest_rank/none）、`value`、`unit=ms`，单请求另需`trace_id`。P95只接受nearest_rank且不能绑定单请求；请求值只接受none及request。错误结构、未知字段、非有限数值直接校验失败，不能由调用方自设容差。
+
+P95依据同窗口已查询摘要的统计值（现有工具按每个指标的非空样本独立nearest-rank计算），单请求值依据已查询的同ID详情；不允许把详情数值当聚合依据。仅在引用与作用域充分时比较数值，按固定小数点后三位毫秒舍入一致性判断；数值错误为矛盾，跨快照/窗口、未查询引用、来源缺失、全量流量主张均为证据不足。验证器信任执行器产生的工具结果，不独立证明工具统计实现或快照真值；评测仍须从原始观测独立重算。
+
+代表调用（已有`run`和事件摘要证据`summary`）：
+
+```python
+result = run.verify_claim(dict(
+    snapshot_id=run.snapshot_id, evidence_id=summary['id'], window='incident',
+    metric='inventory_ms', statistic='p95', population='observed_non_null',
+    method='nearest_rank', value=352.727, unit='ms'))
+```
+
+人工拆解的历史错误只用于明确机制需求，新增验收使用20请求合成冻结快照，让订单P95和库存P95落在不同请求，并包含高于P95的极值。错误库存P95主张被识别，库存/订单P95及单请求正确对照保留；另验证错窗口、错请求、未获取引用、全量外推和缺失来源不被支持，所有校验均保持报告和预算不变。14项执行器专项、32项active主线回归通过（项目虚拟环境运行`python -m unittest discover -s tests -p "test_active*.py" -v`），无模型调用。这是机制测试，不是独立真实模型效果对照。下一步在正式`evals/run_active_comparison.py`冻结候选主张、独立标签及引用检查/统计验证的配对结果，保持开发与验收来源分离。
+
 2026-11-15作用域Schema修订：模型可见查询按tool区分三种结构，摘要要求非空window，下钻要求非空window及32位trace_id，配置/入口比较的window和trace_id只能省略或为null。react直接使用该联合Schema，active在Plan.query内使用；其余计划约束不变。Schema仍通过既有system消息提供，不代表供应商强制约束解码。执行器保留原Query和query_key独立校验，因此忽略Schema的动作仍以invalid_query_scope拒绝并保留有界候选诊断及真实用量，不自动补窗口或重试。报告仍为v3；提示Schema变化会改变冻结源码哈希，新模型实验须新建批次，旧失败不改写。本次仅离线及模拟HTTP验证，没有新模型效果数据。
 
 ## 2026-11-14 混合阶段的局部定位（v3，当前协议）

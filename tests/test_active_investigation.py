@@ -27,6 +27,53 @@ def mixed_fixture(together):
 
 
 class ActiveTests(unittest.TestCase):
+    def test_statistical_claim_verification_and_scope(self):
+        # Distinct requests own the two P95s; nearest-rank is not max at n=20.
+        value = fixture('downstream')
+        rows = value['incident']['trace']['requests']
+        rows[0].update(orders_ms=900., inventory_ms=352.213)
+        rows[1].update(orders_ms=800., inventory_ms=352.213)
+        rows[2].update(orders_ms=500., inventory_ms=352.727)
+        rows[3].update(orders_ms=450., inventory_ms=999.)
+        run = self.run_state(value)
+        summary = run.execute(plan('get_window_summary', 'incident'))
+        detail = run.execute(plan('get_request_trace', 'incident', rows[1]['trace_id']))
+        before = run.report(), run.remaining
+        claim = dict(snapshot_id=run.snapshot_id, evidence_id=summary['id'],
+                     window='incident', metric='inventory_ms', statistic='p95',
+                     population='observed_non_null', method='nearest_rank', value=352.213, unit='ms')
+        result = run.verify_claim(claim)
+        self.assertEqual((result['status'], result['expected_value']), ('contradicted', 352.727))
+        self.assertEqual(run.verify_claim(dict(claim, value=352.727))['status'], 'supported')
+        self.assertEqual(run.verify_claim(dict(claim, metric='orders_ms', value=800.))['status'], 'supported')
+        request = dict(claim, evidence_id=detail['id'], statistic='request_value',
+                       method='none', population='request', trace_id=rows[1]['trace_id'])
+        self.assertEqual(run.verify_claim(request)['status'], 'supported')
+        for changed, reason in [({'evidence_id': detail['id']}, 'aggregate_requires_summary'),
+                                ({'window': 'reference'}, 'window_mismatch'),
+                                ({'snapshot_id': 'f'*64}, 'snapshot_mismatch'),
+                                ({'evidence_id': 'e99'}, 'unobserved_reference'),
+                                ({'population': 'all_traffic'}, 'population_not_observed')]:
+            with self.subTest(reason=reason):
+                result = run.verify_claim(dict(claim, **changed))
+                self.assertEqual((result['status'], result['reason']), ('insufficient_evidence', reason))
+        self.assertEqual(run.verify_claim(dict(request, trace_id=rows[0]['trace_id']))['status'], 'insufficient_evidence')
+        self.assertEqual((run.report(), run.remaining), before)
+
+    def test_claim_missing_evidence_and_invalid_claim_are_read_only(self):
+        run = self.run_state(mask_sources(fixture(), trace=False))
+        summary = run.execute(plan('get_window_summary', 'incident'))
+        claim = dict(snapshot_id=run.snapshot_id, evidence_id=summary['id'], window='incident',
+                     metric='inventory_ms', statistic='p95', population='observed_non_null',
+                     method='nearest_rank', value=352.213, unit='ms')
+        before = run.report(), run.remaining
+        self.assertEqual(run.verify_claim(claim)['reason'], 'statistic_unavailable')
+        for change in ({'value': float('nan')}, {'unit': 's'}, {'method': 'none'},
+                       {'trace_id': 'a'*32}, {'tolerance': 100}):
+            with self.assertRaises(ValueError):
+                run.verify_claim(dict(claim, **change))
+        self.assertEqual((run.report(), run.remaining), before)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
