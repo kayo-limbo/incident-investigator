@@ -27,6 +27,21 @@ def mixed_fixture(together):
 
 
 class ActiveTests(unittest.TestCase):
+    def test_failed_request_outside_slowest_three_requires_window_discovery(self):
+        value = fixture('downstream')
+        row = value['incident']['trace']['requests'][-1]
+        row.update(status=503, orders_ms=100., inventory_ms=None, error_type='PoolTimeout')
+        run = self.run_state(value)
+        query = plan('get_request_trace', 'incident', row['trace_id'])
+        before = run.remaining
+        with self.assertRaisesRegex(ValueError, 'unobserved_trace'):
+            run.execute(query)
+        self.assertEqual(run.remaining, before)
+        data = run.execute(plan('get_window_summary', 'incident'))['data']
+        self.assertNotIn(row['trace_id'], data['drilldown_ids'])
+        self.assertEqual(data['http_503_ids'], [row['trace_id']])
+        self.assertEqual(run.execute(query)['data']['request']['status'], 503)
+
     def test_bound_claim_keeps_source_scope_precision_and_complete_sentence(self):
         import hashlib
         from backend.investigation.claim_verification import verify_bound_claim

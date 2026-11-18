@@ -17,6 +17,28 @@ from test_active_investigation import mixed_fixture
 
 
 class ComparisonTests(unittest.IsolatedAsyncioTestCase):
+    def test_503_dispatch_requires_linked_client_evidence_and_budget(self):
+        from backend.investigation.failure_evidence import investigate_503
+        from backend.investigation.evidence_models import ObservationRef
+        store = SnapshotStore(self.root / 'windows')
+        root = dict(span_id='root', parents=[], operation='GET /orders/preview', service='orders',
+                    duration_ms=10., tags={'span.kind': 'server', 'http.response.status_code': 503})
+        client = dict(span_id='client', parents=['root'], operation='GET inventory', service='orders',
+                      tags={'span.kind': 'client', 'error.type': 'PoolTimeout', 'client.request_headers_started': False})
+        traces = {'1' * 32: {'spans': [root, client]}}
+        for i in range(2, 5):
+            traces[str(i) * 32] = {'spans': [dict(root, duration_ms=400.,
+                tags={'span.kind': 'server', 'http.response.status_code': 200})]}
+        window = dict(projection_version='pool-window-v1', traces=traces)
+        key = store.freeze(window)
+        self.assertEqual(investigate_503(store, key, budget=2, by_status=False)['code'], 'no_visible_503')
+        self.assertEqual(investigate_503(store, key, budget=1)['code'], 'budget_exhausted')
+        report = investigate_503(store, key, budget=2)
+        self.assertEqual(report['code'], 'inspect_orders_connection_pool')
+        self.assertEqual([store.resolve(ObservationRef(**ref)) for ref in report['evidence']], [503, 'PoolTimeout', False])
+        client['parents'] = ['different-request']
+        self.assertEqual(investigate_503(store, store.freeze(window), budget=2)['code'], 'unconfirmed_failure_stage')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import Field
 
 from .bundle_evidence import Strict
+from .failure_evidence import sample_ids
 from .paired_evidence import PAIRED_BUNDLE
 from .paired_baseline import statistics, stage
 
@@ -70,9 +71,13 @@ class ActiveInvestigation:
             trace = b[query.window]['trace']
             stats = statistics(trace)
             # Summary does not reveal runtime configuration or per-request timings.
-            ids = [r['trace_id'] for r in sorted(trace['requests'], key=lambda r: r['orders_ms'], reverse=True)[:3]]
-            return dict(quality=trace['quality'], outcome=stage(stats) if stats else 'unavailable',
+            ids = sample_ids(trace['requests'])
+            failures = sample_ids(trace['requests'], 503)
+            summary = dict(quality=trace['quality'], outcome=stage(stats) if stats else 'unavailable',
                 sample_count=len(trace['requests']), statistics=stats, drilldown_ids=ids)
+            if failures:
+                summary['http_503_ids'] = failures
+            return summary
         if query.tool == 'get_request_trace':
             row = next(r for r in b[query.window]['trace']['requests'] if r['trace_id'] == query.trace_id)
             fields = ('trace_id', 'status', 'orders_ms', 'inventory_ms', 'pre_send_ms', 'error_type')
@@ -113,7 +118,8 @@ class ActiveInvestigation:
             raise ValueError('hypothesis_query_mismatch')
         if query.tool == 'get_request_trace':
             summary = self.observed.get('get_window_summary:' + query.window)
-            if not summary or query.trace_id not in summary['data']['drilldown_ids']:
+            if not summary or query.trace_id not in (
+                    summary['data']['drilldown_ids'] + summary['data'].get('http_503_ids', [])):
                 raise ValueError('unobserved_trace')
         before = self.state()
         if before['stop'] != 'continue':

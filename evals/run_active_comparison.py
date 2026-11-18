@@ -9,6 +9,7 @@ from pathlib import Path
 
 from backend.investigation.active_investigation import ActiveInvestigation
 from backend.investigation.claim_verification import verify_claim
+from backend.investigation.failure_evidence import investigate_503
 from backend.investigation.active_policies import ActivePlanModel, ReactQueryModel, PolicyCancelled, investigate_policy, fixed_query, wrap_query
 from backend.investigation.model import ModelConfig
 from backend.investigation.paired_evidence import mask_sources
@@ -344,12 +345,25 @@ def compare_claims(directory, *, audit=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('freeze', 'fixed', 'models', 'audit', 'freeze-claims', 'claims', 'audit-claims'))
+    parser.add_argument('mode', choices=('freeze', 'fixed', 'models', 'audit', 'freeze-claims', 'claims', 'audit-claims',
+                                         'compare-503'))
     parser.add_argument('directory', type=Path)
     parser.add_argument('--source', type=Path)
+    parser.add_argument('--snapshot-id', action='append', help='compare-503：每个采集一次，可重复指定')
     parser.add_argument('--authorized-model-calls', action='store_true', help='仅在用户明确授权本批观测外发与费用后使用')
     args = parser.parse_args()
-    if args.mode == 'freeze-claims':
+    if args.mode == 'compare-503':
+        ids = args.snapshot_id or []
+        if not ids or len(set(ids)) != len(ids) or not args.directory.is_dir():
+            parser.error('compare-503 requires an existing store and distinct --snapshot-id values')
+        store = SnapshotStore(args.directory)
+        result = {}
+        for variant, by_status in [('slowest', False), ('http_503', True)]:
+            reports = [investigate_503(store, key, budget=2, by_status=by_status) for key in ids]
+            result[variant] = dict(reports=reports, supported=sum(
+                r['code'] == 'inspect_orders_connection_pool' for r in reports),
+                total=len(reports), tool_calls=sum(r['tool_calls'] for r in reports))
+    elif args.mode == 'freeze-claims':
         if args.source is None:
             parser.error('freeze-claims requires --source')
         result = freeze_claims(args.source, args.directory)

@@ -1,5 +1,27 @@
 # 开发查询策略首轮真实对照
 
+## 订单 503 的单请求取证
+
+值班问题是“哪条失败请求支持先查订单客户端连接池”。paired-v2 的 active 摘要保留原有最慢三条，并在有 503 时额外公开最多三个 503 请求 ID；只能下钻对应窗口已经公开的 ID。历史 pool-window-v1 快照则可通过 `active_cli --strategy failure-503` 查询原始 span 字段。两者复用取样函数；paired 投影缺少请求头标志，字段级分派结果仅在旧窗口原始 span 上验收。
+
+对照每窗同样最多两次逻辑查询：一次索引、一次候选 trace。两组分别公开最慢三条或 503 中最慢三条，均可按状态从候选中优先选 503。只有订单 503 span 的直接子调用唯一匹配订单侧库存客户端调用，且记录 PoolTimeout 与未开始发送请求头时，才建议首查订单客户端池。返回三条可回查的字段引用。分派仅针对选中的请求。
+
+| 本地 25 份 pool-window-v1 冻结快照 | 最慢三条 | 按 503 取样 |
+| --- | ---: | ---: |
+| 有目标证据的窗口中交付带引用的分派 | 0/7 | 7/7 |
+| 其余窗口错误分派至连接池 | 0/18 | 0/18 |
+| 实际逻辑查询总数 | 25 | 32 |
+
+按原始 span 的父子关系和状态独立复核，所有交付引用均解析到同一请求的 503、PoolTimeout、headers_started=false；两次正式入口输出一致。25 是窗口快照数，包含已审查开发材料；额外查询用于取得缺失的请求证据。没有独立盲测、线上耗时或模型策略收益数据。覆盖范围限于这一种有正面证据的首查方向。
+
+单窗复现（对照命令可重复指定不同的 `--snapshot-id`）：
+
+```powershell
+$key = 'cf7c6342d5d6081ce6e1daaf000900c808bb6f8cca26ae838d54233f9631519f'
+python -m evals.run_active_comparison compare-503 .snapshots --snapshot-id $key
+python -m backend.investigation.active_cli $key --store .snapshots --strategy failure-503 --budget 2 --output .snapshots/new-503-report.private.json
+```
+
 ## 2026-11-18 自动定位因果断言的材料筛查
 
 **决定：在材料筛查处收尾。** 本地有两个额外的联合故障窗口，但可与这两个窗口对应的自然模型正文为零。自动定位的命中、漏报、误改和观测保留均未测量。
